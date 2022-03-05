@@ -1,10 +1,5 @@
-import sys
 from .models import PixelNeRFNet
-
-_ogpath = sys.path[:]
-sys.path.append('../../Contrib')
-from PixelNeRFNet_A import PixelNeRFNet_A
-sys.path = _ogpath
+from ....Contrib.PixelNeRFNet_A import PixelNeRFNet_A
 
 def make_model(conf, *args, **kwargs):
     """ Placeholder to allow more model types """
