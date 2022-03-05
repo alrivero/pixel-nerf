@@ -6,7 +6,7 @@ def make_model(conf, *args, **kwargs):
     model_type = conf.get_string("type", "pixelnerf")  # single
     if model_type == "pixelnerf":
         net = PixelNeRFNet(conf, *args, **kwargs)
-    else if model_type == "pixelnerf-a":
+    elif model_type == "pixelnerf-a":
         net = PixelNeRFNet_A(conf, *args, **kwargs)
     else:
         raise NotImplementedError("Unsupported model type", model_type)
