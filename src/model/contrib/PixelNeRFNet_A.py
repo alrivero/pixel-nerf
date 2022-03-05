@@ -1,4 +1,4 @@
-from ..pixel_nerf.src.model.models import PixelNeRFNet
+from ..models import PixelNeRFNet
 
 class PixelNeRFNet_A(PixelNeRFNet):
     # For now, identical to the PixelNeRF
