@@ -54,12 +54,14 @@ class AppearanceDataset(torch.utils.data.Dataset):
 
         self.image_to_tensor = get_image_to_tensor_balanced()
         print(
-            "Loading ETH3D dataset",
+            "Loading Appearance dataset",
             self.base_path,
             "stage",
             stage,
             len(self.all_objs),
             "objs",
+            "type:",
+            sub_format,
         )
 
         # NOTE: Right now, no intrisic or extrinsic camera information is being used here!
