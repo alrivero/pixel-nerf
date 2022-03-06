@@ -3,7 +3,7 @@ import os
 from .MultiObjectDataset import MultiObjectDataset
 from .DVRDataset import DVRDataset
 from .SRNDataset import SRNDataset
-from contrib.AppearanceDataset import AppearanceDataset
+from .contrib.AppearanceDataset import AppearanceDataset
 
 from .data_util import ColorJitterDataset
 
