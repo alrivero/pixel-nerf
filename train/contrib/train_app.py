@@ -59,7 +59,7 @@ def extra_args(parser):
         "-FA",
         type=str,
         default=None,
-        help="Appearance format, eth3D (only for now)",
+        help="Appearance format, eth3d (only for now)",
     )
     return parser
 

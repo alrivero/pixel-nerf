@@ -19,7 +19,7 @@ class AppearanceDataset(torch.utils.data.Dataset):
         stage="train",
         list_prefix="new_",
         image_size=None,
-        sub_format="eth3D",
+        sub_format="eth3d",
         scale_focal=True,
         max_imgs=100000,
         z_near=1.2,
