@@ -8,15 +8,7 @@ class AppearanceEncoder(StyleEncoder):
         input_dim = conf.get_float("input_dim", 3)
         dim = conf.get_float("dim", 512)
         style_dim = conf.get_float("style_dim", 512)
-
-        norm_str = conf.get_string("norm")
-        if norm_str == "instance":
-            norm = nn.InstanceNorm2d(dim)
-        elif norm_str == "batch":
-            norm = nn.BatchNorm2d(dim)
-        else:
-            raise AttributeError("No valid norm assignable to appearance encoder") 
-
+        norm = conf.get_string("norm", "none")
         activ = conf.get_string("activ", "relu")
         pad_type = conf.get_string("pad_type", "reflect")
 
