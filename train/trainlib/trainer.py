@@ -1,3 +1,4 @@
+from email.policy import strict
 import os.path
 import torch
 import numpy as np
@@ -78,7 +79,7 @@ class Trainer:
             if os.path.exists(self.optim_state_path):
                 try:
                     self.optim.load_state_dict(
-                        torch.load(self.optim_state_path, map_location=device)
+                        torch.load(self.optim_state_path, map_location=device), strict=False
                     )
                 except:
                     warnings.warn(
