@@ -1,4 +1,5 @@
 import os
+import warnings
 from ..models import PixelNeRFNet
 from .AppearanceEncoder import AppearanceEncoder
 
