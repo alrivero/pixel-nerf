@@ -90,7 +90,7 @@ print(
 
 net = make_model(conf["model"]).to(device=device)
 net.stop_encoder_grad = args.freeze_enc
-net.stop_app_encoder_grad = args.freeze_app_encoder
+net.stop_app_encoder_grad = args.freeze_app_enc
 if args.freeze_enc:
     print("Encoder frozen")
     net.encoder.eval()
