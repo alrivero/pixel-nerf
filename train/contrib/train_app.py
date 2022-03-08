@@ -66,13 +66,13 @@ def extra_args(parser):
     )
     parser.add_argument(
         "--load_app_encoder",
-        action="store_false",
+        action="store_true",
         default=None,
         help="Load an appearance encoder's weights",
     )
     parser.add_argument(
         "--freeze_app_enc",
-        action="store_false",
+        action="store_true",
         default=None,
         help="Freeze appearance encoder weights and only train MLP",
     )
