@@ -1,3 +1,4 @@
+import os
 from ..models import PixelNeRFNet
 from .AppearanceEncoder import AppearanceEncoder
 
