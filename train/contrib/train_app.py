@@ -64,6 +64,18 @@ def extra_args(parser):
         default=None,
         help="Appearance format, eth3d (only for now)",
     )
+    parser.add_argument(
+        "--load_app_encoder",
+        action="store_false",
+        default=None,
+        help="Load an appearance encoder's weights",
+    )
+    parser.add_argument(
+        "--freeze_app_enc",
+        action="store_false",
+        default=None,
+        help="Freeze appearance encoder weights and only train MLP",
+    )
     return parser
 
 
@@ -78,6 +90,7 @@ print(
 
 net = make_model(conf["model"]).to(device=device)
 net.stop_encoder_grad = args.freeze_enc
+net.stop_app_encoder_grad = args.freeze_app_encoder
 if args.freeze_enc:
     print("Encoder frozen")
     net.encoder.eval()
