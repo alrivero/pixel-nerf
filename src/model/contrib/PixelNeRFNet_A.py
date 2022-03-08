@@ -17,7 +17,7 @@ class PixelNeRFNet_A(PixelNeRFNet):
         Your can put a checkpoint at checkpoints/<exp>/pixel_nerf_init to use as initialization.
         :param opt_init if true, loads from init checkpoint instead of usual even when resuming
         """
-        self = super().load_weights(self, args, opt_init, strict, device)
+        self = super().load_weights(args, opt_init, strict, device)
 
         # Only load weights for our appearance encoder if we want to
         if args.load_app_encoder:
