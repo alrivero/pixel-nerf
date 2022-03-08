@@ -79,7 +79,7 @@ class Trainer:
             if os.path.exists(self.optim_state_path):
                 try:
                     self.optim.load_state_dict(
-                        torch.load(self.optim_state_path, map_location=device), strict=False
+                        torch.load(self.optim_state_path, map_location=device)
                     )
                 except:
                     warnings.warn(
