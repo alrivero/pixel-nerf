@@ -22,7 +22,7 @@ class PixelNeRFNet_A(PixelNeRFNet):
         self = super().load_weights(args, opt_init, strict, device)
 
         # Only load weights for our appearance encoder if we want to
-        if args.load_app_encoder:
+        if not args.load_app_encoder:
             return
 
         model_path = "%s/%s/%s" % (args.checkpoints_path, args.name, "app_encoder_init")
@@ -35,7 +35,7 @@ class PixelNeRFNet_A(PixelNeRFNet):
             self.app_encoder.load_state_dict(
                 torch.load(model_path, map_location=device), strict=True
             )
-        elif not opt_init:
+        else:
             warnings.warn(
                 (
                     "WARNING: {} does not exist, not loaded!! Apearance encoder will be re-initialized.\n"
