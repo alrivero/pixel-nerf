@@ -1,7 +1,7 @@
 import os
 import warnings
-from .AppearanceEncoder import AppearanceEncoder
-from src.model.models import PixelNeRFNet
+from .models import PixelNeRFNet
+from contrib.model.AppearanceEncoder import AppearanceEncoder
 
 class PixelNeRFNet_A(PixelNeRFNet):
     # For now, identical to the PixelNeRF
