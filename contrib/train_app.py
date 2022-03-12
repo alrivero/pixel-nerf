@@ -16,8 +16,8 @@ sys.path.insert(
 )
 
 import warnings
-from model import make_model, loss
 import trainlib
+from model import make_model, loss
 from render import NeRFRenderer
 from data import get_split_dataset
 import util
