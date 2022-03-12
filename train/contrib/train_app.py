@@ -1,6 +1,7 @@
 # Training to a set of multiple objects (e.g. ShapeNet or DTU)
 # tensorboard logs available in logs/<expname>
 
+import imp
 import sys
 import os
 
@@ -21,6 +22,8 @@ import numpy as np
 import torch.nn.functional as F
 import torch
 from dotmap import DotMap
+from loss import ReferenceColorLoss
+from random import randint
 
 
 def extra_args(parser):
@@ -139,6 +142,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         )
         density_loss_conf = conf["loss.density"]
         self.density_app_crit = loss.get_density_loss(density_loss_conf)
+        self.ref_app_crit = ReferenceColorLoss(conf, args.refencdir)
 
 
         if args.resume:
@@ -174,7 +178,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
     def extra_save_state(self):
         torch.save(renderer.state_dict(), self.renderer_state_path)
 
-    def calc_losses(self, data, app_data, is_train=True, global_step=0):
+    def pass_setup(self, data, is_train=True, global_step=0):
         if "images" not in data:
             return {}
         all_images = data["images"].to(device=device)  # (SB, NV, 3, H, W)
@@ -256,24 +260,66 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             c=all_c.to(device=device) if all_c is not None else None,
         )
 
+        return all_rays, all_rgb_gt
+
+    def batch_pass(self, app_data, all_rays, is_train=True, global_step=0):
         # Appearance encoder encoding
         net.app_encoder.encode(app_data["image"])
-
         render_dict = DotMap(render_par(all_rays, want_weights=True,))
-        coarse = render_dict.coarse
-        fine = render_dict.fine
-        using_fine = len(fine) > 0
 
+        return render_dict, 
+
+    def calc_losses(self, data, app_data, is_train=True, global_step=0):
+        # Do some setup to establish rays and view images
+        all_rays, all_rgb_gt = pass_setup(self, data, is_train=True, global_step=0)
+
+        # Render out the scene normally using an input view as our encoding source
+        rand_inview_ind = randint(0, len(data["images"]))
+        inview_app_data = {
+            "path": data["path"],
+            "img_id": rand_inview_ind,
+            "image": data["images"][rand_inview_ind],
+        }
+        reg_render_dict = batch_pass(self, inview_app_data, is_train, global_step)
+
+        # Render our scene using the appearance image we're trying to harmonize with
+        app_render_dict = batch_pass(self, app_data, is_train, global_step)
+
+        # Loss information
         loss_dict = {}
 
-        rgb_loss = self.rgb_coarse_crit(coarse.rgb, all_rgb_gt)
-        loss_dict["rc"] = rgb_loss.item() * self.lambda_coarse
-        if using_fine:
-            fine_loss = self.rgb_fine_crit(fine.rgb, all_rgb_gt)
-            rgb_loss = rgb_loss * self.lambda_coarse + fine_loss * self.lambda_fine
-            loss_dict["rf"] = fine_loss.item() * self.lambda_fine
+        # Compute our standard PixelNeRF loss
+        coarse_reg = reg_render_dict.coarse
+        fine_reg = reg_render_dict.fine
+        using_fine_reg = len(fine_reg) > 0
 
-        loss = rgb_loss
+        rgb_loss_reg = self.rgb_coarse_crit(coarse_reg.rgb, all_rgb_gt) * self.lambda_coarse
+        loss_dict["rc"] = rgb_loss_reg.item()
+        if using_fine_reg:
+            fine_loss_reg = self.rgb_fine_crit(fine_reg.rgb, all_rgb_gt)
+            rgb_loss_reg = rgb_loss_reg + fine_loss_reg * self.lambda_fine
+            loss_dict["rf"] = fine_loss_reg.item() * self.lambda_fine
+        
+        # Compute SSH reference encoder loss for appearance pass and density (depth) regularization
+        coarse_app = app_render_dict.coarse
+        fine_app = app_render_dict.fine
+        using_fine_app = len(fine_app) > 0
+
+        if using_fine_app:
+            density_app_loss = self.density_app_crit(fine_reg.depth, fine_app.depth)
+        else:
+            density_app_loss = self.density_app_crit(coarse_reg.depth, coarse_app.depth)
+        density_app_loss *= self.lambda_density
+        loss_dict["ad"] = density_app_loss.item()
+
+        if using_fine_app:
+            ref_app_loss = self.ref_app_crit(fine_app.rgb, app_data["image"]) * self.lambda_ref
+        else:
+            ref_app_loss = self.ref_app_crit(coarse_app.rgb, app_data["image"]) * self.lambda_ref
+        loss_dict["ar"] = ref_app_loss.item()
+
+        # Backprop time
+        loss = rgb_loss_reg + density_app_loss + ref_app_loss
         if is_train:
             loss.backward()
         loss_dict["t"] = loss.item()
@@ -289,7 +335,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         renderer.train()
         return losses
 
-    def vis_step(self, data, global_step, idx=None):
+    def vis_step(self, data, app_data, global_step, idx=None):
         if "images" not in data:
             return {}
         if idx is None:
@@ -336,6 +382,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 focal.to(device=device),
                 c=c.to(device=device) if c is not None else None,
             )
+            net.app_encoder.encode(app_data["image"])
             test_rays = test_rays.reshape(1, H * W, -1)
             render_dict = DotMap(render_par(test_rays, want_weights=True))
             coarse = render_dict.coarse
@@ -445,9 +492,10 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
                     if batch % self.eval_interval == 0:
                         test_data = next(test_data_iter)
+                        test_app_data = next(test_app_data_iter)
                         self.net.eval()
                         with torch.no_grad():
-                            test_losses = self.eval_step(test_data, global_step=step_id)
+                            test_losses = self.eval_step(test_data, test_app_data, global_step=step_id)
                         self.net.train()
                         test_loss_str = fmt_loss_str(test_losses)
                         self.writer.add_scalars("train", losses, global_step=step_id)
@@ -474,19 +522,33 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
                     if batch % self.vis_interval == 0:
                         print("generating visualization")
-                        test_app_data = next(test_app_data_iter)
                         if self.fixed_test:
                             test_data = next(iter(self.test_data_loader))
+                            test_app_data = next(iter(self.test_app_data_loader))
                         else:
                             test_data = next(test_data_iter)
+                            test_app_data = next(test_app_data_iter)
+                        rand_testview_ind = randint(0, len(test_data["images"]))
+                        testview_app_data = {
+                            "path": test_data["path"],
+                            "img_id": rand_testview_ind,
+                            "image": test_data["images"][rand_testview_ind],
+                        }
+
                         self.net.eval()
                         with torch.no_grad():
                             vis, vis_vals = self.vis_step(
+                                test_data, testview_app_data, global_step=step_id
+                            )
+                            vis_app, vis_vals_app = self.vis_step(
                                 test_data, test_app_data, global_step=step_id
                             )
                         if vis_vals is not None:
                             self.writer.add_scalars(
                                 "vis", vis_vals, global_step=step_id
+                            )
+                            self.writer.add_scalars(
+                                "vis_app", vis_vals_app, global_step=step_id
                             )
                         self.net.train()
                         if vis is not None:
@@ -500,7 +562,17 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                                 ),
                                 vis_u8,
                             )
+                        if vis_app is not None:
+                            import imageio
 
+                            vis_u8_app = (vis_app * 255).astype(np.uint8)
+                            imageio.imwrite(
+                                os.path.join(
+                                    self.visual_path,
+                                    "{:04}_{:04}_vis_app.png".format(epoch, batch),
+                                ),
+                                vis_u8_app,
+                            )
                     if (
                         batch == self.num_total_batches - 1
                         or batch % self.accu_grad == self.accu_grad - 1
