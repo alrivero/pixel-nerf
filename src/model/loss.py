@@ -132,5 +132,5 @@ def get_density_loss(conf, using_bg=False, reduction="mean"):
     return (
         torch.nn.L1Loss(reduction=reduction)
         if conf.get_bool("use_l1")
-        else torch.nn.MSELoss(reduction=reduction)s
+        else torch.nn.MSELoss(reduction=reduction)
     )
