@@ -76,6 +76,9 @@ def extra_args(parser):
         default=None,
         help="Freeze appearance encoder weights and only train MLP",
     )
+    parser.add_argument(
+        "--refencdir", "-DRE", type=str, default=None, help="Reference encoder directory (used for loss)"
+    )
     return parser
 
 
@@ -83,7 +86,7 @@ args, conf = util.args.parse_args(extra_args, training=True, default_ray_batch_s
 device = util.get_cuda(args.gpu_id[0])
 
 dset, val_dset, _ = get_split_dataset(args.dataset_format, args.datadir)
-daset, val_daset, _ = get_split_dataset(args.appearance_format, args.appdir)
+dset_app, val_dset_app, _ = get_split_dataset(args.appearance_format, args.appdir)
 print(
     "dset z_near {}, z_far {}, lindisp {}".format(dset.z_near, dset.z_far, dset.lindisp)
 )
@@ -94,6 +97,9 @@ net.stop_app_encoder_grad = args.freeze_app_enc
 if args.freeze_enc:
     print("Encoder frozen")
     net.encoder.eval()
+if args.freeze_app_enc:
+    print("Appearance encoder frozen")
+    net.app_encoder.eval()
 
 renderer = NeRFRenderer.from_conf(conf["renderer"], lindisp=dset.lindisp,).to(
     device=device
@@ -105,7 +111,7 @@ render_par = renderer.bind_parallel(net, args.gpu_id).eval()
 nviews = list(map(int, args.nviews.split()))
 
 
-class PixelNeRFTrainer(trainlib.Trainer):
+class PixelNeRF_ATrainer(trainlib.Trainer):
     def __init__(self):
         super().__init__(net, dset, val_dset, args, conf["train"], device=device)
         self.renderer_state_path = "%s/%s/_renderer" % (
@@ -125,6 +131,16 @@ class PixelNeRFTrainer(trainlib.Trainer):
             fine_loss_conf = conf["loss.rgb_fine"]
         self.rgb_fine_crit = loss.get_rgb_loss(fine_loss_conf, False)
 
+        # Loss configuration for appearance specific losses
+        self.lambda_density = conf.get_float("loss.lambda_density")
+        self.lambda_ref = conf.get_float("loss.lambda_ref")
+        print(
+            "lambda density {} and reference {}".format(self.lambda_density, self.lambda_ref)
+        )
+        density_loss_conf = conf["loss.density"]
+        self.density_app_crit = loss.get_density_loss(density_loss_conf)
+
+
         if args.resume:
             if os.path.exists(self.renderer_state_path):
                 renderer.load_state_dict(
@@ -136,13 +152,29 @@ class PixelNeRFTrainer(trainlib.Trainer):
 
         self.use_bbox = args.no_bbox_step > 0
 
+        # Add loading data for appearance images
+        self.train_app_data_loader = torch.utils.data.DataLoader(
+            dset_app,
+            batch_size=args.batch_size,
+            shuffle=True,
+            num_workers=8,
+            pin_memory=False,
+        )
+        self.test_app_data_loader = torch.utils.data.DataLoader(
+            val_dset_app,
+            batch_size=min(args.batch_size, 16),
+            shuffle=True,
+            num_workers=4,
+            pin_memory=False,
+        )
+
     def post_batch(self, epoch, batch):
         renderer.sched_step(args.batch_size)
 
     def extra_save_state(self):
         torch.save(renderer.state_dict(), self.renderer_state_path)
 
-    def calc_losses(self, data, is_train=True, global_step=0):
+    def calc_losses(self, data, app_data, is_train=True, global_step=0):
         if "images" not in data:
             return {}
         all_images = data["images"].to(device=device)  # (SB, NV, 3, H, W)
@@ -224,6 +256,9 @@ class PixelNeRFTrainer(trainlib.Trainer):
             c=all_c.to(device=device) if all_c is not None else None,
         )
 
+        # Appearance encoder encoding
+        net.app_encoder.encode(app_data["image"])
+
         render_dict = DotMap(render_par(all_rays, want_weights=True,))
         coarse = render_dict.coarse
         fine = render_dict.fine
@@ -245,12 +280,12 @@ class PixelNeRFTrainer(trainlib.Trainer):
 
         return loss_dict
 
-    def train_step(self, data, global_step):
-        return self.calc_losses(data, is_train=True, global_step=global_step)
+    def train_step(self, data, app_data, global_step):
+        return self.calc_losses(data, app_data, is_train=True, global_step=global_step) 
 
-    def eval_step(self, data, global_step):
+    def eval_step(self, data, app_data, global_step):
         renderer.eval()
-        losses = self.calc_losses(data, is_train=False, global_step=global_step)
+        losses = self.calc_losses(data, app_data, is_train=False, global_step=global_step)
         renderer.train()
         return losses
 
@@ -367,6 +402,117 @@ class PixelNeRFTrainer(trainlib.Trainer):
         renderer.train()
         return vis, vals
 
+    def start(self):
+        def fmt_loss_str(losses):
+            return "loss " + (" ".join(k + ":" + str(losses[k]) for k in losses))
 
+        def data_loop(dl):
+            """
+            Loop an iterable infinitely
+            """
+            while True:
+                for x in iter(dl):
+                    yield x
+
+        test_data_iter = data_loop(self.test_data_loader)
+        train_app_data_iter = data_loop(self.train_app_data_loader)
+        test_app_data_iter = data_loop(self.test_app_data_loader)
+
+        step_id = self.start_iter_id
+
+        progress = tqdm.tqdm(bar_format="[{rate_fmt}] ")
+        for epoch in range(self.num_epochs):
+            self.writer.add_scalar(
+                "lr", self.optim.param_groups[0]["lr"], global_step=step_id
+            )
+
+            batch = 0
+            for _ in range(self.num_epoch_repeats):
+                for data in self.train_data_loader:
+                    app_data = next(train_app_data_iter)
+                    losses = self.train_step(data, app_data, global_step=step_id)
+                    loss_str = fmt_loss_str(losses)
+                    if batch % self.print_interval == 0:
+                        print(
+                            "E",
+                            epoch,
+                            "B",
+                            batch,
+                            loss_str,
+                            " lr",
+                            self.optim.param_groups[0]["lr"],
+                        )
+
+                    if batch % self.eval_interval == 0:
+                        test_data = next(test_data_iter)
+                        self.net.eval()
+                        with torch.no_grad():
+                            test_losses = self.eval_step(test_data, global_step=step_id)
+                        self.net.train()
+                        test_loss_str = fmt_loss_str(test_losses)
+                        self.writer.add_scalars("train", losses, global_step=step_id)
+                        self.writer.add_scalars(
+                            "test", test_losses, global_step=step_id
+                        )
+                        print("*** Eval:", "E", epoch, "B", batch, test_loss_str, " lr")
+
+                    if batch % self.save_interval == 0 and (epoch > 0 or batch > 0):
+                        print("saving")
+                        if self.managed_weight_saving:
+                            self.net.save_weights(self.args)
+                        else:
+                            torch.save(
+                                self.net.state_dict(), self.default_net_state_path
+                            )
+                        torch.save(self.optim.state_dict(), self.optim_state_path)
+                        if self.lr_scheduler is not None:
+                            torch.save(
+                                self.lr_scheduler.state_dict(), self.lrsched_state_path
+                            )
+                        torch.save({"iter": step_id + 1}, self.iter_state_path)
+                        self.extra_save_state()
+
+                    if batch % self.vis_interval == 0:
+                        print("generating visualization")
+                        test_app_data = next(test_app_data_iter)
+                        if self.fixed_test:
+                            test_data = next(iter(self.test_data_loader))
+                        else:
+                            test_data = next(test_data_iter)
+                        self.net.eval()
+                        with torch.no_grad():
+                            vis, vis_vals = self.vis_step(
+                                test_data, test_app_data, global_step=step_id
+                            )
+                        if vis_vals is not None:
+                            self.writer.add_scalars(
+                                "vis", vis_vals, global_step=step_id
+                            )
+                        self.net.train()
+                        if vis is not None:
+                            import imageio
+
+                            vis_u8 = (vis * 255).astype(np.uint8)
+                            imageio.imwrite(
+                                os.path.join(
+                                    self.visual_path,
+                                    "{:04}_{:04}_vis.png".format(epoch, batch),
+                                ),
+                                vis_u8,
+                            )
+
+                    if (
+                        batch == self.num_total_batches - 1
+                        or batch % self.accu_grad == self.accu_grad - 1
+                    ):
+                        self.optim.step()
+                        self.optim.zero_grad()
+
+                    self.post_batch(epoch, batch)
+                    step_id += 1
+                    batch += 1
+                    progress.update(1)
+            if self.lr_scheduler is not None:
+                self.lr_scheduler.step()
 trainer = PixelNeRFTrainer()
 trainer.start()

@@ -1,5 +1,5 @@
 import torch
-
+from unet_tile_se_norm import StyleEncoder
 
 class AlphaLossNV2(torch.nn.Module):
     """
@@ -87,10 +87,35 @@ class RGBWithBackground(torch.nn.Module):
         )
         return torch.mean(weighted_element_err) + torch.mean(torch.log(lambda_bg))
 
+class ReferenceColorLoss(torch.nn.Module):
+    """SSH relighting reference encoding comparison"""
+
+    def __init__(self, conf, encoder_dir=None):
+        super().__init__()
+        self.ref_encoder = StyleEncoder(4, 3, 32, 512, norm="BN", activ="relu", pad_type='reflect')
+        self.ref_encoder.eval()
+        if conf.get_bool("pretrained") and encoder_dir is not None:
+            self.ref_encoder.load_state_dict(torch.load(encoder_dir))
+            print("using refernce color loss with pretrained weights")
+        else:
+            print("using refernce color loss WITHOUT pretrained weights")
+        
+        for param in self.ref_encoder.parameters():
+            param.requires_grad = False
+        
+        
+        self.ref_loss = torch.torch.nn.MSELoss()
+    
+    def forward(self, outputs, targets):
+        outputs_encodings = self.ref_encoder(outputs)
+        targets_encodings = self.ref_encoder(targets)
+
+        return self.ref_loss(outputs_encodings, targets_encodings)
+
 
 def get_rgb_loss(conf, coarse=True, using_bg=False, reduction="mean"):
     if conf.get_bool("use_uncertainty", False) and not coarse:
-        print("using loss with uncertainty")
+        print("using rgb loss with uncertainty")
         return RGBWithUncertainty(conf)
     #     if using_bg:
     #         print("using loss with background")
@@ -100,4 +125,12 @@ def get_rgb_loss(conf, coarse=True, using_bg=False, reduction="mean"):
         torch.nn.L1Loss(reduction=reduction)
         if conf.get_bool("use_l1")
         else torch.nn.MSELoss(reduction=reduction)
+    )
+
+def get_density_loss(conf, using_bg=False, reduction="mean"):
+    print("using vanilla density loss")
+    return (
+        torch.nn.L1Loss(reduction=reduction)
+        if conf.get_bool("use_l1")
+        else torch.nn.MSELoss(reduction=reduction)s
     )

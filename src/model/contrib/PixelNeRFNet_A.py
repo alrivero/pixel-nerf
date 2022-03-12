@@ -135,11 +135,13 @@ class PixelNeRFNet_A(PixelNeRFNet):
                 global_latent = repeat_interleave(global_latent, num_repeats)
                 mlp_input = torch.cat((global_latent, mlp_input), dim=-1)
             
+            # Added appearance encoder as input to MLP
             if self.use_app_encoder:
-                # Do something here
+                app_embedding = self.app_encoder.app_encoding
                 if self.stop_app_encoder_grad:
-                    pass
-                
+                    app_embedding = app_embedding.detach()
+
+                mlp_input = torch.cat((app_embedding, mlp_input), dim=-1)
 
             # Camera frustum culling stuff, currently disabled
             combine_index = None

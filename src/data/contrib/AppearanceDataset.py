@@ -5,6 +5,7 @@ import glob
 import imageio
 import numpy as np
 import cv2
+import random
 from util import get_image_to_tensor_balanced
 
 class AppearanceDataset(torch.utils.data.Dataset):
@@ -83,36 +84,22 @@ class AppearanceDataset(torch.utils.data.Dataset):
             if (x.endswith(".jpg") or x.endswith(".png"))
         ]
         rgb_paths = sorted(rgb_paths)
-
-        if len(rgb_paths) <= self.max_imgs:
-            sel_indices = np.arange(len(rgb_paths))
-        else:
-            sel_indices = np.random.choice(len(rgb_paths), self.max_imgs, replace=False)
-            rgb_paths = [rgb_paths[i] for i in sel_indices]
+        
+        # Get a random image from this directory
+        img_ind = random.randint(0, len(rgb_paths))
+        img = imageio.imread(rgb_paths[img_ind])[..., :3]
+        img_tensor = self.image_to_tensor(img)
 
         # NOTE: Right now, no intrisic or extrinsic camera information is being used here!
-        # Add it later! (Refer to DVRDataset)
+        # Add it later in necessary! (Refer to DVRDataset)
 
-        all_imgs = []
-        for idx, rgb_path in enumerate(rgb_paths):
-            i = sel_indices[idx]
-            img = imageio.imread(rgb_path)[..., :3]
-            img_tensor = self.image_to_tensor(img)
-
-            # Tons of camera stuff happening here!
-
-            all_imgs.append(img_tensor)
-        all_imgs = torch.stack(all_imgs)
-
-        if self.image_size is not None and all_imgs.shape[-2:] != self.image_size:
-            all_imgs = F.interpolate(all_imgs, size=self.image_size, mode="area")
-
-            # Camera stuff here too
+        if self.image_size is not None and img_tensor.shape[-2:] != self.image_size:
+            img_tensor = F.interpolate(img_tensor, size=self.image_size, mode="area")
         
         result = {
-            "path": root_dir,
+            "path": rgb_paths[img_ind],
             "img_id": index,
-            "images": all_imgs,
+            "image": img,
         }
 
         return result

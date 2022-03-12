@@ -13,3 +13,8 @@ class AppearanceEncoder(StyleEncoder):
         pad_type = conf.get_string("pad_type", "reflect")
 
         super().__init__(n_downsample, input_dim, dim, style_dim, norm, activ, pad_type)
+
+        self.app_encoding = None
+    
+    def encode(self, image):
+        self.app_encoding = self(image)
