@@ -9,10 +9,10 @@ sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 )
 sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 )
 sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "contrib"))
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "train"))
 )
 
 import warnings
