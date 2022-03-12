@@ -1,5 +1,5 @@
 from .models import PixelNeRFNet
-from .contrib.PixelNeRFNet_A import PixelNeRFNet_A
+from contrib.model.PixelNeRFNet_A import PixelNeRFNet_A
 
 def make_model(conf, *args, **kwargs):
     """ Placeholder to allow more model types """

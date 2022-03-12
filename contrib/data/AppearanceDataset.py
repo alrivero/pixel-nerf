@@ -3,8 +3,6 @@ import torch
 import torch.nn.functional as F
 import glob
 import imageio
-import numpy as np
-import cv2
 import random
 from util import get_image_to_tensor_balanced
 
