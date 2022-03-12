@@ -1,5 +1,5 @@
 import torch
-from unet_tile_se_norm import StyleEncoder
+from contrib.model.unet_tile_se_norm import StyleEncoder
 
 class AlphaLossNV2(torch.nn.Module):
     """
