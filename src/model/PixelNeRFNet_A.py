@@ -1,3 +1,4 @@
+import torch
 import os
 import warnings
 from .models import PixelNeRFNet
