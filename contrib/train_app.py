@@ -277,7 +277,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         all_rays, all_rgb_gt = self.pass_setup(data, is_train=True, global_step=0)
 
         # Render out the scene normally using an input view as our encoding source
-        rand_inview_ind = randint(0, len(data["images"]))
+        rand_inview_ind = randint(0, len(data["images"]) - 1)
         inview_app_data = {
             "path": data["path"],
             "img_id": rand_inview_ind,
