@@ -264,7 +264,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         return all_rays, all_rgb_gt
 
-    def batch_pass(self, app_data, all_rays, is_train=True, global_step=0):
+    def batch_pass(self, app_data, all_rays):
         # Appearance encoder encoding
         net.app_encoder.encode(app_data["image"])
         render_dict = DotMap(render_par(all_rays, want_weights=True,))
@@ -273,7 +273,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
     def calc_losses(self, data, app_data, is_train=True, global_step=0):
         # Do some setup to establish rays and view images
-        all_rays, all_rgb_gt = pass_setup(self, data, is_train=True, global_step=0)
+        all_rays, all_rgb_gt = pass_setup(data, is_train=True, global_step=0)
 
         # Render out the scene normally using an input view as our encoding source
         rand_inview_ind = randint(0, len(data["images"]))
@@ -282,10 +282,10 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             "img_id": rand_inview_ind,
             "image": data["images"][rand_inview_ind],
         }
-        reg_render_dict = batch_pass(self, inview_app_data, is_train, global_step)
+        reg_render_dict = batch_pass(inview_app_data, all_rays)
 
         # Render our scene using the appearance image we're trying to harmonize with
-        app_render_dict = batch_pass(self, app_data, is_train, global_step)
+        app_render_dict = batch_pass(app_data, all_rays)
 
         # Loss information
         loss_dict = {}
