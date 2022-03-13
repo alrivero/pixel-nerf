@@ -161,14 +161,14 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         # Add loading data for appearance images
         self.train_app_data_loader = torch.utils.data.DataLoader(
             dset_app,
-            batch_size=args.batch_size,
+            batch_size=1,
             shuffle=True,
             num_workers=8,
             pin_memory=False,
         )
         self.test_app_data_loader = torch.utils.data.DataLoader(
             val_dset_app,
-            batch_size=min(args.batch_size, 16),
+            batch_size=1,
             shuffle=True,
             num_workers=4,
             pin_memory=False,

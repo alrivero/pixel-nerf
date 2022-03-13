@@ -85,7 +85,6 @@ class AppearanceDataset(torch.utils.data.Dataset):
         
         # Get a random image from this directory
         img_ind = random.randint(0, len(rgb_paths))
-        print(rgb_paths[img_ind])
         img = imageio.imread(rgb_paths[img_ind])[..., :3]
         img_tensor = self.image_to_tensor(img)
 
@@ -98,7 +97,7 @@ class AppearanceDataset(torch.utils.data.Dataset):
         result = {
             "path": rgb_paths[img_ind],
             "img_id": index,
-            "image": img,
+            "image": img_tensor,
         }
 
         return result
