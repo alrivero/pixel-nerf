@@ -79,7 +79,7 @@ class AppearanceDataset(torch.utils.data.Dataset):
         rgb_paths = [
             x
             for x in glob.glob(os.path.join(root_dir, "images", "dslr_images_undistorted", "*"))
-            if (x.endswith(".jpg") or x.endswith(".png"))
+            if (x.endswith(".JPG") or x.endswith(".PNG"))
         ]
         rgb_paths = sorted(rgb_paths)
         
