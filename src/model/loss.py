@@ -94,11 +94,11 @@ class ReferenceColorLoss(torch.nn.Module):
         super().__init__()
         self.ref_encoder = StyleEncoder(4, 3, 32, 512, norm="BN", activ="relu", pad_type='reflect')
         self.ref_encoder.eval()
-        if conf.get_bool("pretrained", False) and encoder_dir is not None:
+        if conf.get_bool("pretrained", True) and encoder_dir is not None:
             self.ref_encoder.load_state_dict(torch.load(encoder_dir))
-            print("using refernce color loss with pretrained weights")
+            print("using reference color loss with pretrained weights")
         else:
-            print("using refernce color loss WITHOUT pretrained weights")
+            print("using reference color loss WITHOUT pretrained weights")
         
         for param in self.ref_encoder.parameters():
             param.requires_grad = False

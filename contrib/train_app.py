@@ -24,6 +24,7 @@ import util
 import numpy as np
 import torch.nn.functional as F
 import torch
+import tqdm
 from dotmap import DotMap
 from random import randint
 
@@ -130,11 +131,10 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             "lambda coarse {} and fine {}".format(self.lambda_coarse, self.lambda_fine)
         )
         self.rgb_coarse_crit = loss.get_rgb_loss(conf["loss.rgb"], True)
-        fine_loss_conf = conf["loss.rgb"]
         if "rgb_fine" in conf["loss"]:
             print("using fine loss")
             fine_loss_conf = conf["loss.rgb_fine"]
-        self.rgb_fine_crit = loss.get_rgb_loss(fine_loss_conf, False)
+            self.rgb_fine_crit = loss.get_rgb_loss(fine_loss_conf, False)
 
         # Loss configuration for appearance specific losses
         self.lambda_density = conf.get_float("loss.lambda_density")
