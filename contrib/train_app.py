@@ -115,8 +115,6 @@ render_par = renderer.bind_parallel(net, args.gpu_id).eval()
 
 nviews = list(map(int, args.nviews.split()))
 
-print("MADE IT")
-
 
 class PixelNeRF_ATrainer(trainlib.Trainer):
     def __init__(self):
@@ -590,5 +588,5 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                     progress.update(1)
             if self.lr_scheduler is not None:
                 self.lr_scheduler.step()
-trainer = PixelNeRFTrainer()
+trainer = PixelNeRF_ATrainer()
 trainer.start()
