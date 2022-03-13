@@ -161,14 +161,14 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         # Add loading data for appearance images
         self.train_app_data_loader = torch.utils.data.DataLoader(
             dset_app,
-            batch_size=1,
+            batch_size=args.batch_size,
             shuffle=True,
             num_workers=8,
             pin_memory=False,
         )
         self.test_app_data_loader = torch.utils.data.DataLoader(
             val_dset_app,
-            batch_size=1,
+            batch_size=args.batch_size,
             shuffle=True,
             num_workers=4,
             pin_memory=False,
@@ -277,12 +277,20 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         all_rays, all_rgb_gt = self.pass_setup(data, is_train=True, global_step=0)
 
         # Render out the scene normally using an input view as our encoding source
-        rand_inview_ind = randint(0, len(data["images"]) - 1)
+        rand_inview_ind = randint(0, len(data["images"][0]) - 1)
+        app_images = data["images"][0][rand_inview_ind]
+        for i in range(1, args.batch_size):
+            rand_inview_ind = randint(0, len(data["images"][i]) - 1)
+            new_app_tensor = data["images"][i][rand_inview_ind]
+
+            app_images = torch.stack([app_images, new_app_tensor])
         inview_app_data = {
-            "path": data["path"],
-            "img_id": rand_inview_ind,
-            "image": data["images"][rand_inview_ind],
+            "path": None,   # It's ok if this data is N/A for now
+            "img_id": None,
+            "image": app_images,
         }
+        print(inview_app_data["image"].shape)
+
         reg_render_dict = self.batch_pass(inview_app_data, all_rays)
 
         # Render our scene using the appearance image we're trying to harmonize with
