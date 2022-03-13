@@ -266,7 +266,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
     def batch_pass(self, app_data, all_rays):
         # Appearance encoder encoding
-        net.app_encoder.encode(app_data["image"])
+        app_img = app_data["image"].to(device=device)
+        net.app_encoder.encode(app_img)
         render_dict = DotMap(render_par(all_rays, want_weights=True,))
 
         return render_dict, 
