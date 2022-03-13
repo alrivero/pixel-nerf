@@ -161,14 +161,14 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         # Add loading data for appearance images
         self.train_app_data_loader = torch.utils.data.DataLoader(
             dset_app,
-            batch_size=args.batch_size,
+            batch_size=1,
             shuffle=True,
             num_workers=8,
             pin_memory=False,
         )
         self.test_app_data_loader = torch.utils.data.DataLoader(
             val_dset_app,
-            batch_size=args.batch_size,
+            batch_size=1,
             shuffle=True,
             num_workers=4,
             pin_memory=False,
@@ -291,7 +291,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         # }
         # print(inview_app_data["image"].shape)
 
-        reg_render_dict = self.batch_pass(inview_app_data, all_rays)
+        reg_render_dict = self.batch_pass(app_data, all_rays)  # Change me back!
 
         # Render our scene using the appearance image we're trying to harmonize with
         app_render_dict = self.batch_pass(app_data, all_rays)
