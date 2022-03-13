@@ -2,6 +2,8 @@ import os
 import warnings
 from .models import PixelNeRFNet
 from contrib.model.AppearanceEncoder import AppearanceEncoder
+import torch.autograd.profiler as profiler
+from util import repeat_interleave
 
 class PixelNeRFNet_A(PixelNeRFNet):
     # For now, identical to the PixelNeRF
