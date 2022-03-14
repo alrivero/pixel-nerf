@@ -67,9 +67,6 @@ class PixelNeRFNet_A(PixelNeRFNet):
                 ..., 0
             ]
             xyz = xyz_rot + self.poses[:, None, :3, 3]
-            print(xyz.shape)
-            print(xyz[0][0], xyz[4][0])
-            print(xyz[0][0], xyz[1][0])
 
             if self.d_in > 0:
                 # * Encode the xyz coordinates
@@ -117,6 +114,7 @@ class PixelNeRFNet_A(PixelNeRFNet):
                 uv += repeat_interleave(
                     self.c.unsqueeze(1), NS if self.c.shape[0] > 1 else 1
                 )  # (SB*NS, B, 2)
+                print("why", uv)
                 latent = self.encoder.index(
                     uv, None, self.image_shape
                 )  # (SB * NS, latent, B)
