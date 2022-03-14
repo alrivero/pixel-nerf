@@ -288,7 +288,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             rand_inview_ind = randint(0, len(src_images[i]) - 1)
             new_app_tensor = src_images[i][rand_inview_ind].unsqueeze(0)
 
-            app_images = torch.stack([app_images, new_app_tensor])
+            app_images = torch.cat([app_images, new_app_tensor], 0)
         inview_app_data = {
             "path": None,   # It's ok if this data is N/A for now
             "img_id": None,
