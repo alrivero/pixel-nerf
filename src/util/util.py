@@ -62,11 +62,11 @@ def repeat_interleave(input, repeats, dim=0):
     https://github.com/pytorch/pytorch/issues/31980
     """
     output = input.unsqueeze(1)
-    print(output, "uno")
+    print(output.shape, "uno")
     output = output.expand(-1, repeats, *input.shape[1:])
-    print(output, "dos")
+    print(output.shape, "dos")
     output = output.reshape(-1, *input.shape[1:])
-    print(output, "tres")
+    print(output.shape, "tres")
     return output
 
 
