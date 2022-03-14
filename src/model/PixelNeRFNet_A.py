@@ -62,9 +62,9 @@ class PixelNeRFNet_A(PixelNeRFNet):
             NS = self.num_views_per_obj
 
             # Transform query points into the camera spaces of the input views
-            print(xyz.shape)
             xyz = repeat_interleave(xyz, NS)  # (SB*NS, B, 3)
-            print(xyz.shape)
+            print(xyz[0][0], xyz[4][0])
+            print(xyz[0][0], xyz[1][0])
             xyz_rot = torch.matmul(self.poses[:, None, :3, :3], xyz.unsqueeze(-1))[
                 ..., 0
             ]

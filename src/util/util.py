@@ -61,13 +61,8 @@ def repeat_interleave(input, repeats, dim=0):
     torch.repeat_interleave is currently very slow
     https://github.com/pytorch/pytorch/issues/31980
     """
-    output = input.unsqueeze(1)
-    print(output.shape, "uno")
-    output = output.expand(-1, repeats, *input.shape[1:])
-    print(output.shape, "dos")
-    output = output.reshape(-1, *input.shape[1:])
-    print(output.shape, "tres")
-    return output
+    output = input.unsqueeze(1).expand(-1, repeats, *input.shape[1:])
+    return output.reshape(-1, *input.shape[1:])
 
 
 def get_image_to_tensor_balanced(image_size=0):
