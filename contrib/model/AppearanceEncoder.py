@@ -16,5 +16,5 @@ class AppearanceEncoder(StyleEncoder):
 
         self.app_encoding = None
     
-    def encode(self, image):
-        self.app_encoding = self(image)
+    def encode(self, app_data):
+        self.app_encoding = self(app_data["images"])

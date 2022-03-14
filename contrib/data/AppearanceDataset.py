@@ -97,7 +97,7 @@ class AppearanceDataset(torch.utils.data.Dataset):
         result = {
             "path": rgb_paths[img_ind],
             "img_id": index,
-            "image": img_tensor,
+            "images": img_tensor,
         }
 
         return result

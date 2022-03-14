@@ -114,7 +114,6 @@ class PixelNeRFNet_A(PixelNeRFNet):
                 uv += repeat_interleave(
                     self.c.unsqueeze(1), NS if self.c.shape[0] > 1 else 1
                 )  # (SB*NS, B, 2)
-                print("why", uv.shape)
                 latent = self.encoder.index(
                     uv, None, self.image_shape
                 )  # (SB * NS, latent, B)
@@ -139,14 +138,13 @@ class PixelNeRFNet_A(PixelNeRFNet):
                 global_latent = repeat_interleave(global_latent, num_repeats)
                 mlp_input = torch.cat((global_latent, mlp_input), dim=-1)
             
-            print(mlp_input.shape)
             # Added appearance encoder as input to MLP
-            # if self.use_app_encoder:
-            #     app_embedding = self.app_encoder.app_encoding
-            #     if self.stop_app_encoder_grad:
-            #         app_embedding = app_embedding.detach()
-
-            #     mlp_input = torch.cat((app_embedding, mlp_input), dim=-1)
+            if self.use_app_encoder:
+                app_embedding = self.app_encoder.app_encoding
+                if self.stop_app_encoder_grad:
+                    app_embedding = app_embedding.detach()
+                app_embedding = torch.repeat_interleave(app_embedding, NS * B, 0)
+                mlp_input = torch.cat((app_embedding, mlp_input), dim=-1)
 
             # Camera frustum culling stuff, currently disabled
             combine_index = None

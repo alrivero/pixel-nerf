@@ -91,7 +91,13 @@ def extra_args(parser):
 args, conf = util.args.parse_args(extra_args, training=True, default_ray_batch_size=128)
 device = util.get_cuda(args.gpu_id[0])
 
-dset, val_dset, _ = get_split_dataset(args.dataset_format, args.datadir)
+app_size = None
+app_size_h = conf.get_int("data.app_data.img_size_h", None)
+app_size_w = conf.get_int("data.app_data.img_size_w", None)
+if (app_size_h is not None and app_size_w is not None):
+    app_size = (app_size_h, app_size_w)
+
+dset, val_dset, _ = get_split_dataset(args.dataset_format, args.datadir, image_size=app_size)
 dset_app, val_dset_app, _ = get_split_dataset(args.appearance_format, args.appdir)
 print(
     "dset z_near {}, z_far {}, lindisp {}".format(dset.z_near, dset.z_far, dset.lindisp)
@@ -161,14 +167,14 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         # Add loading data for appearance images
         self.train_app_data_loader = torch.utils.data.DataLoader(
             dset_app,
-            batch_size=1,
+            batch_size=args.batch_size,
             shuffle=True,
             num_workers=8,
             pin_memory=False,
         )
         self.test_app_data_loader = torch.utils.data.DataLoader(
             val_dset_app,
-            batch_size=1,
+            batch_size=min(args.batch_size, 16),
             shuffle=True,
             num_workers=4,
             pin_memory=False,
@@ -255,7 +261,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         all_bboxes = all_poses = all_images = None
 
-        print(src_images.shape)
         net.encode(
             src_images,
             src_poses,
@@ -267,32 +272,29 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
     def batch_pass(self, app_data, all_rays):
         # Appearance encoder encoding
-        # app_img = app_data["image"].to(device=device)
-        # net.app_encoder.encode(app_img)
+        net.app_encoder.encode(app_data)
         render_dict = DotMap(render_par(all_rays, want_weights=True,))
 
-        return render_dict, 
+        return render_dict
 
     def calc_losses(self, data, app_data, is_train=True, global_step=0):
         # Do some setup to establish rays and view images
         src_images, all_rays, all_rgb_gt = self.pass_setup(data, is_train=True, global_step=0)
 
         # Render out the scene normally using an input view as our encoding source
-        # rand_inview_ind = randint(0, len(data["images"][0]) - 1)
-        # app_images = data["images"][0][rand_inview_ind]
-        # for i in range(1, args.batch_size):
-        #     rand_inview_ind = randint(0, len(data["images"][i]) - 1)
-        #     new_app_tensor = data["images"][i][rand_inview_ind]
+        rand_inview_ind = randint(0, len(src_images["images"][0]) - 1)
+        app_images = src_images["images"][0][rand_inview_ind]
+        for i in range(1, args.batch_size):
+            rand_inview_ind = randint(0, len(src_images["images"][i]) - 1)
+            new_app_tensor = src_images["images"][i][rand_inview_ind]
 
-        #     app_images = torch.stack([app_images, new_app_tensor])
-        # inview_app_data = {
-        #     "path": None,   # It's ok if this data is N/A for now
-        #     "img_id": None,
-        #     "image": app_images,
-        # }
-        # print(inview_app_data["image"].shape)
-
-        reg_render_dict = self.batch_pass(app_data, all_rays)  # Change me back!
+            app_images = torch.stack([app_images, new_app_tensor])
+        inview_app_data = {
+            "path": None,   # It's ok if this data is N/A for now
+            "img_id": None,
+            "images": app_images,
+        }
+        reg_render_dict = self.batch_pass(inview_app_data, all_rays)
 
         # Render our scene using the appearance image we're trying to harmonize with
         app_render_dict = self.batch_pass(app_data, all_rays)
