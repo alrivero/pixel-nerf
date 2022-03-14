@@ -107,6 +107,7 @@ class PixelNeRFNet_A(PixelNeRFNet):
 
             print(mlp_input[0], mlp_input[1])
             print(mlp_input[0], mlp_input[12])
+            print(mlp_input[0], mlp_input[24576])
             if self.use_encoder:
                 # Grab encoder's latent code.
                 uv = -xyz[:, :, :2] / xyz[:, :, 2:]  # (SB, B, 2)
