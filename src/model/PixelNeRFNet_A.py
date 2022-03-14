@@ -140,12 +140,12 @@ class PixelNeRFNet_A(PixelNeRFNet):
             
             print(mlp_input.shape)
             # Added appearance encoder as input to MLP
-            if self.use_app_encoder:
-                app_embedding = self.app_encoder.app_encoding
-                if self.stop_app_encoder_grad:
-                    app_embedding = app_embedding.detach()
+            # if self.use_app_encoder:
+            #     app_embedding = self.app_encoder.app_encoding
+            #     if self.stop_app_encoder_grad:
+            #         app_embedding = app_embedding.detach()
 
-                mlp_input = torch.cat((app_embedding, mlp_input), dim=-1)
+            #     mlp_input = torch.cat((app_embedding, mlp_input), dim=-1)
 
             # Camera frustum culling stuff, currently disabled
             combine_index = None

@@ -148,6 +148,8 @@ class ResnetFC(nn.Module):
             else:
                 x = torch.zeros(self.d_hidden, device=zx.device)
 
+            print(z.shape, x.shape, self.n_blocks)
+
             for blkid in range(self.n_blocks):
                 if blkid == self.combine_layer:
                     # The following implements camera frustum culling, requires torch_scatter
