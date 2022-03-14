@@ -114,7 +114,7 @@ class PixelNeRFNet_A(PixelNeRFNet):
                 uv += repeat_interleave(
                     self.c.unsqueeze(1), NS if self.c.shape[0] > 1 else 1
                 )  # (SB*NS, B, 2)
-                print("why", uv)
+                print("why", uv.shape)
                 latent = self.encoder.index(
                     uv, None, self.image_shape
                 )  # (SB * NS, latent, B)
