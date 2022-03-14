@@ -143,7 +143,7 @@ class PixelNeRFNet_A(PixelNeRFNet):
                 app_embedding = self.app_encoder.app_encoding
                 if self.stop_app_encoder_grad:
                     app_embedding = app_embedding.detach()
-                app_embedding = torch.repeat_interleave(app_embedding, NS * B, 0)
+                app_embedding = repeat_interleave(app_embedding, NS * B, 0)
                 mlp_input = torch.cat((app_embedding, mlp_input), dim=-1)
 
             # Camera frustum culling stuff, currently disabled
