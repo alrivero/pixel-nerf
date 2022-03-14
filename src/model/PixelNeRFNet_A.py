@@ -62,7 +62,9 @@ class PixelNeRFNet_A(PixelNeRFNet):
             NS = self.num_views_per_obj
 
             # Transform query points into the camera spaces of the input views
+            print(xyz.shape)
             xyz = repeat_interleave(xyz, NS)  # (SB*NS, B, 3)
+            print(xyz.shape)
             xyz_rot = torch.matmul(self.poses[:, None, :3, :3], xyz.unsqueeze(-1))[
                 ..., 0
             ]
@@ -109,15 +111,12 @@ class PixelNeRFNet_A(PixelNeRFNet):
             if self.use_encoder:
                 # Grab encoder's latent code.
                 uv = -xyz[:, :, :2] / xyz[:, :, 2:]  # (SB, B, 2)
-                print(uv.shape, "a")
                 uv *= repeat_interleave(
                     self.focal.unsqueeze(1), NS if self.focal.shape[0] > 1 else 1
                 )
-                print(uv.shape, "moo")
                 uv += repeat_interleave(
                     self.c.unsqueeze(1), NS if self.c.shape[0] > 1 else 1
                 )  # (SB*NS, B, 2)
-                print(uv.shape, "gus")
                 latent = self.encoder.index(
                     uv, None, self.image_shape
                 )  # (SB * NS, latent, B)
