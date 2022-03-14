@@ -161,7 +161,6 @@ class SpatialEncoder(nn.Module):
         self.latent_scaling[0] = self.latent.shape[-1]
         self.latent_scaling[1] = self.latent.shape[-2]
         self.latent_scaling = self.latent_scaling / (self.latent_scaling - 1) * 2.0
-        print("latent", self.latent.shape)
         return self.latent
 
     @classmethod
