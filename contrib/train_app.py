@@ -97,8 +97,8 @@ app_size_w = conf.get_int("data.app_data.img_size_w", None)
 if (app_size_h is not None and app_size_w is not None):
     app_size = (app_size_h, app_size_w)
 
-dset, val_dset, _ = get_split_dataset(args.dataset_format, args.datadir, image_size=app_size)
-dset_app, val_dset_app, _ = get_split_dataset(args.appearance_format, args.appdir)
+dset, val_dset, _ = get_split_dataset(args.dataset_format, args.datadir)
+dset_app, val_dset_app, _ = get_split_dataset(args.appearance_format, args.appdir, image_size=app_size)
 print(
     "dset z_near {}, z_far {}, lindisp {}".format(dset.z_near, dset.z_far, dset.lindisp)
 )

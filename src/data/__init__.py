@@ -45,7 +45,6 @@ def get_split_dataset(dataset_type, datadir, want_split="all", training=True, **
             train_aug_flags = {"extra_inherit_attrs": ["sub_format"]}
     elif dataset_type == "eth3d":
         dset_class = AppearanceDataset
-        flags["image_size"] = kwargs["image_size"]
     else:
         raise NotImplementedError("Unsupported dataset type", dataset_type)
 
