@@ -156,7 +156,7 @@ class StyleEncoder(nn.Module):
         # self.model += [nn.AdaptiveAvgPool2d(1)] # global average pooling
         # self.model += [nn.Conv2d(dim, style_dim, 1, 1, 0)]
         self.model = nn.Sequential(*self.model)
-        self.se = SELayer(512)
+        self.se = SELayer(dim)
         self.output_dim = dim
 
     def forward(self, x):
