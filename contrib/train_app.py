@@ -255,6 +255,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         all_bboxes = all_poses = all_images = None
 
+        print(src_images.shape)
         net.encode(
             src_images,
             src_poses,
@@ -262,7 +263,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             c=all_c.to(device=device) if all_c is not None else None,
         )
 
-        return all_rays, all_rgb_gt
+        return src_images, all_rays, all_rgb_gt
 
     def batch_pass(self, app_data, all_rays):
         # Appearance encoder encoding
@@ -274,7 +275,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
     def calc_losses(self, data, app_data, is_train=True, global_step=0):
         # Do some setup to establish rays and view images
-        all_rays, all_rgb_gt = self.pass_setup(data, is_train=True, global_step=0)
+        src_images, all_rays, all_rgb_gt = self.pass_setup(data, is_train=True, global_step=0)
 
         # Render out the scene normally using an input view as our encoding source
         # rand_inview_ind = randint(0, len(data["images"][0]) - 1)
