@@ -282,11 +282,11 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         src_images, all_rays, all_rgb_gt = self.pass_setup(data, is_train=True, global_step=0)
 
         # Render out the scene normally using an input view as our encoding source
-        rand_inview_ind = randint(0, len(src_images["images"][0]) - 1)
-        app_images = src_images["images"][0][rand_inview_ind]
+        rand_inview_ind = randint(0, len(src_images[0]) - 1)
+        app_images = src_images[0][rand_inview_ind]
         for i in range(1, args.batch_size):
-            rand_inview_ind = randint(0, len(src_images["images"][i]) - 1)
-            new_app_tensor = src_images["images"][i][rand_inview_ind]
+            rand_inview_ind = randint(0, len(src_images[i]) - 1)
+            new_app_tensor = src_images[i][rand_inview_ind]
 
             app_images = torch.stack([app_images, new_app_tensor])
         inview_app_data = {
