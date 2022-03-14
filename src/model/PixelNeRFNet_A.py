@@ -63,8 +63,6 @@ class PixelNeRFNet_A(PixelNeRFNet):
 
             # Transform query points into the camera spaces of the input views
             xyz = repeat_interleave(xyz, NS)  # (SB*NS, B, 3)
-            print(xyz[0][0], xyz[4][0])
-            print(xyz[0][0], xyz[1][0])
             xyz_rot = torch.matmul(self.poses[:, None, :3, :3], xyz.unsqueeze(-1))[
                 ..., 0
             ]
@@ -107,7 +105,8 @@ class PixelNeRFNet_A(PixelNeRFNet):
 
                 mlp_input = z_feature
 
-            print(mlp_input.shape)
+            print(mlp_input[0], mlp_input[1])
+            print(mlp_input[0], mlp_input[12])
             if self.use_encoder:
                 # Grab encoder's latent code.
                 uv = -xyz[:, :, :2] / xyz[:, :, 2:]  # (SB, B, 2)
