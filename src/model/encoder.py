@@ -106,6 +106,9 @@ class SpatialEncoder(nn.Module):
                 mode=self.index_interp,
                 padding_mode=self.index_padding,
             )
+            print(uv.shape, "A")
+            print(self.latent.shape, "MON")
+            print(samples[:, :, :, 0].shape, "GUS")
             return samples[:, :, :, 0]  # (B, C, N)
 
     def forward(self, x):
