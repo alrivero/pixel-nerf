@@ -14,7 +14,13 @@ class AppearanceEncoder(StyleEncoder):
 
         super().__init__(n_downsample, input_dim, dim, style_dim, norm, activ, pad_type)
 
+        # Avg pool used but not found in model
+        self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+
         self.app_encoding = None
     
     def encode(self, app_data):
-        self.app_encoding = self(app_data["images"])
+        app_out = self(app_data["images"])
+        app_out = self.avg_pool(app_out)
+
+        return app_out
