@@ -2,6 +2,7 @@ import torch
 import os
 import warnings
 from .models import PixelNeRFNet
+from resnetfc import ResnetFC
 from contrib.model.AppearanceEncoder import AppearanceEncoder
 import torch.autograd.profiler as profiler
 from util import repeat_interleave
@@ -15,6 +16,16 @@ class PixelNeRFNet_A(PixelNeRFNet):
         self.stop_app_encoder_grad = stop_app_encoder_grad
         if self.use_app_encoder:
             self.app_encoder = AppearanceEncoder(conf["app_encoder"])
+
+            # We need to add a few more linear layers as our input size has changed 
+            # and we want to reuse the weight from vanilla PixelNeRF
+            self.d_app_enc = conf.getint("app_encoder.dim") * 16
+            ext_dim = self.d_in + self.d_latent + self.d_app_enc
+            ext_hidden = self.d_in + self.d_latent + (self.d_app_enc / 2)
+            ext_out = self.d_in + self.d_latent
+
+            self.ext_coarse = ResnetFC(ext_dim, d_out=ext_out, n_blocks=1, d_latent=0, d_hidden=ext_hidden)
+            self.ext_fine = ResnetFC(ext_dim, d_out=ext_out, n_blocks=1, d_latent=0, d_hidden=ext_hidden)
     
     def load_weights(self, args, opt_init=False, strict=False, device=None):
         """
@@ -152,6 +163,14 @@ class PixelNeRFNet_A(PixelNeRFNet):
 
             # Run main NeRF network
             if coarse or self.mlp_fine is None:
+                if self.use_app_encoder:
+                    mlp_input = self.ext_coarse(
+                        mlp_input,
+                        combine_inner_dims=(self.num_views_per_obj, B),
+                        combine_index=combine_index,
+                        dim_size=dim_size,
+                    )
+                    
                 mlp_output = self.mlp_coarse(
                     mlp_input,
                     combine_inner_dims=(self.num_views_per_obj, B),
@@ -159,6 +178,13 @@ class PixelNeRFNet_A(PixelNeRFNet):
                     dim_size=dim_size,
                 )
             else:
+                if self.use_app_encoder:
+                    mlp_input = self.ext_fine(
+                        mlp_input,
+                        combine_inner_dims=(self.num_views_per_obj, B),
+                        combine_index=combine_index,
+                        dim_size=dim_size,
+                    )
                 mlp_output = self.mlp_fine(
                     mlp_input,
                     combine_inner_dims=(self.num_views_per_obj, B),
