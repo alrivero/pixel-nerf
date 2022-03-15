@@ -462,14 +462,12 @@ def combine_interleaved(t, inner_dims=(1,), agg_type="average"):
     if len(inner_dims) == 1 and inner_dims[0] == 1:
         return t
     t = t.reshape(-1, *inner_dims, *t.shape[1:])
-    print(t.shape, "amongus")
     if agg_type == "average":
         t = torch.mean(t, dim=1)
     elif agg_type == "max":
         t = torch.max(t, dim=1)[0]
     else:
         raise NotImplementedError("Unsupported combine type " + agg_type)
-    print(t.shape, "amongus2")
     return t
 
 
