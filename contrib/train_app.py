@@ -236,6 +236,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 rgb_gt_all.permute(0, 2, 3, 1).contiguous().reshape(-1, 3)
             )  # (NV, H, W, 3)
 
+            print(args.ray_batch_size)
             if all_bboxes is not None:
                 pix = util.bbox_sample(bboxes, args.ray_batch_size)
                 pix_inds = pix[..., 0] * H * W + pix[..., 1] * W + pix[..., 2]
