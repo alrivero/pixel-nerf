@@ -20,8 +20,8 @@ class AppearanceEncoder(StyleEncoder):
 
         self.app_encoding = None
     
-    def encode(self, app_data):
-        app_out = self(app_data["images"])
+    def encode(self, app_imgs):
+        app_out = self(app_imgs)
         app_out = self.avg_pool(app_out)
         app_out = torch.flatten(app_out, start_dim=1)
 

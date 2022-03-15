@@ -288,16 +288,12 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             rand_inview_ind = randint(0, len(src_images[i]) - 1)
             new_app_tensor = src_images[i][rand_inview_ind].unsqueeze(0)
 
-            app_images = torch.cat([app_images, new_app_tensor], 0)
-        inview_app_data = {
-            "path": None,   # It's ok if this data is N/A for now
-            "img_id": None,
-            "images": app_images,
-        }
-        reg_render_dict = self.batch_pass(inview_app_data, all_rays)
+        inview_app_imgs = torch.cat([app_images, new_app_tensor], 0)
+        reg_render_dict = self.batch_pass(inview_app_imgs, all_rays)
 
         # Render our scene using the appearance image we're trying to harmonize with
-        app_render_dict = self.batch_pass(app_data, all_rays)
+        app_imgs = app_data["images"].to(device=device)
+        app_render_dict = self.batch_pass(app_imgs, all_rays)
 
         # Loss information
         loss_dict = {}
