@@ -323,9 +323,9 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         loss_dict["ad"] = density_app_loss.item()
 
         if using_fine_app:
-            ref_app_loss = self.ref_app_crit(fine_app.rgb, app_data["image"]) * self.lambda_ref
+            ref_app_loss = self.ref_app_crit(fine_app.rgb, app_data["images"]) * self.lambda_ref
         else:
-            ref_app_loss = self.ref_app_crit(coarse_app.rgb, app_data["image"]) * self.lambda_ref
+            ref_app_loss = self.ref_app_crit(coarse_app.rgb, app_data["images"]) * self.lambda_ref
         loss_dict["ar"] = ref_app_loss.item()
 
         # Backprop time
