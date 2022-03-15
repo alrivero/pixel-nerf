@@ -21,7 +21,7 @@ class PixelNeRFNet_A(PixelNeRFNet):
             # and we want to reuse the weight from vanilla PixelNeRF
             self.d_app_enc = conf.get_int("app_encoder.dim", 512) * 16
             ext_dim = self.d_in + self.d_latent + self.d_app_enc
-            ext_hidden = self.d_in + self.d_latent + (self.d_app_enc / 2)
+            ext_hidden = self.d_in + self.d_latent + (self.d_app_enc // 2)
             ext_out = self.d_in + self.d_latent
 
             self.ext_coarse = ResnetFC(ext_dim, d_out=ext_out, n_blocks=1, d_latent=0, d_hidden=ext_hidden)
