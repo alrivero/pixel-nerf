@@ -270,9 +270,9 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         return src_images, all_rays, all_rgb_gt
 
-    def batch_pass(self, app_data, all_rays):
+    def batch_pass(self, app_imgs, all_rays):
         # Appearance encoder encoding
-        net.app_encoder.encode(app_data)
+        net.app_encoder.encode(app_imgs)
         render_dict = DotMap(render_par(all_rays, want_weights=True,))
 
         return render_dict
@@ -323,9 +323,9 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         loss_dict["ad"] = density_app_loss.item()
 
         if using_fine_app:
-            ref_app_loss = self.ref_app_crit(fine_app.rgb, app_data["images"]) * self.lambda_ref
+            ref_app_loss = self.ref_app_crit(fine_app.rgb, app_imgs) * self.lambda_ref
         else:
-            ref_app_loss = self.ref_app_crit(coarse_app.rgb, app_data["images"]) * self.lambda_ref
+            ref_app_loss = self.ref_app_crit(coarse_app.rgb, app_imgs) * self.lambda_ref
         loss_dict["ar"] = ref_app_loss.item()
 
         # Backprop time
@@ -392,7 +392,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 focal.to(device=device),
                 c=c.to(device=device) if c is not None else None,
             )
-            net.app_encoder.encode(app_data["image"])
+            net.app_encoder.encode(app_data["images"])
             test_rays = test_rays.reshape(1, H * W, -1)
             render_dict = DotMap(render_par(test_rays, want_weights=True))
             coarse = render_dict.coarse
