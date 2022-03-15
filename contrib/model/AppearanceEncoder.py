@@ -1,3 +1,4 @@
+import torch
 from torch import nn
 from .unet_tile_se_norm import StyleEncoder
 
@@ -22,5 +23,7 @@ class AppearanceEncoder(StyleEncoder):
     def encode(self, app_data):
         app_out = self(app_data["images"])
         app_out = self.avg_pool(app_out)
+        print(app_out)
+        app_out = torch.flatten(app_out, start_dim=1)
 
         return app_out
