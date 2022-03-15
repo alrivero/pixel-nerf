@@ -2,7 +2,7 @@ import torch
 import os
 import warnings
 from .models import PixelNeRFNet
-from resnetfc import ResnetFC
+from src.model.resnetfc import ResnetFC
 from contrib.model.AppearanceEncoder import AppearanceEncoder
 import torch.autograd.profiler as profiler
 from util import repeat_interleave
