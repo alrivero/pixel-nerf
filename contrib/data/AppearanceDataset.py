@@ -87,13 +87,14 @@ class AppearanceDataset(torch.utils.data.Dataset):
         img_ind = random.randint(0, len(rgb_paths) - 1)
         img = imageio.imread(rgb_paths[img_ind])[..., :3]
         img_tensor = self.image_to_tensor(img)
-        img_tensor = torch.unsqueeze(img_tensor, 0)
 
         # NOTE: Right now, no intrisic or extrinsic camera information is being used here!
         # Add it later in necessary! (Refer to DVRDataset)
 
         if self.image_size is not None and img_tensor.shape[-2:] != self.image_size:
+            img_tensor = torch.unsqueeze(img_tensor, 0)
             img_tensor = F.interpolate(img_tensor, size=self.image_size, mode="area")
+            img_tensor = torch.squeeze(img_tensor, 0)
         
         result = {
             "path": rgb_paths[img_ind],
