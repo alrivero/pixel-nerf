@@ -277,7 +277,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         return render_dict
 
-    def calc_losses(self, data, app_data, loss_dict, is_train=True, global_step=0):
+    def calc_losses(self, data, app_data, is_train=True, global_step=0):
         # Do some setup to establish rays and view images
         src_images, all_rays, all_rgb_gt = self.pass_setup(data, is_train=True, global_step=0)
 
