@@ -243,7 +243,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             Hs = H * args.app_scale
             Ws = W * args.app_scale
 
-            rand_crop = RandomCrop(Hs, Ws, padding=None, pad_if_needed=False)
+            rand_crop = RandomCrop((Hs, Ws), padding=None, pad_if_needed=False)
             rgb_gt = rand_crop(rgb_gt_all).reshape(-1, 3)
             rays = rand_crop(cam_rays).reshape(-1, 8)
 
