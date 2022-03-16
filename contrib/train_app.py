@@ -27,7 +27,7 @@ import torch
 import tqdm
 from dotmap import DotMap
 from random import randint
-from torchvision.transforms import RandomCrop
+from torchvision.transforms.functional_tensor import crop
 
 
 def extra_args(parser):
@@ -242,10 +242,11 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
             Hs = H * args.app_scale
             Ws = W * args.app_scale
+            i = torch.randint(0, H - Hs + 1, size=(1,)).item()
+            j = torch.randint(0, W - Ws + 1, size=(1,)).item()
 
-            rand_crop = RandomCrop((Hs, Ws), padding=None, pad_if_needed=False)
-            rgb_gt = rand_crop(rgb_gt_all).reshape(-1, 3)
-            rays = rand_crop(cam_rays).reshape(-1, 8)
+            rgb_gt = crop(rgb_gt_all, i, j, Hs, Ws).reshape(-1, 3)
+            rays = crop(cam_rays, i, j, Hs, Ws).reshape(-1, 8)
 
             all_rgb_gt.append(rgb_gt)
             all_rays.append(rays)
