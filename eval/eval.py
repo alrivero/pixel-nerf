@@ -263,7 +263,7 @@ with torch.no_grad():
             focal = focal.to(device=device)
 
         rays_spl = torch.split(all_rays, args.ray_batch_size, dim=0)  # Creates views
-        print(rays_spl.shape, "MONG")
+        print(rays_spl, "MONG")
 
         n_gen_views = len(novel_view_idxs)
 

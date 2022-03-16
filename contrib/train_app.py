@@ -27,6 +27,7 @@ import torch
 import tqdm
 from dotmap import DotMap
 from random import randint
+from torchvision.transforms import RandomCrop
 
 
 def extra_args(parser):
@@ -84,6 +85,9 @@ def extra_args(parser):
     )
     parser.add_argument(
         "--refencdir", "-DRE", type=str, default=None, help="Reference encoder directory (used for loss)"
+    )
+    parser.add_argument(
+        "--app_scale", "-AS", type=float, default=1.0, help="The scale of app scenes (FLESH OUT IDK)"
     )
     return parser
 
@@ -230,22 +234,18 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
             cam_rays = util.gen_rays(
                 poses, W, H, focal, self.z_near, self.z_far, c=c
-            )  # (NV, H, W, 8)
+            ).reshape(NV, 8, H, W)
             rgb_gt_all = images_0to1
             rgb_gt_all = (
                 rgb_gt_all.permute(0, 2, 3, 1).contiguous().reshape(-1, 3)
-            )  # (NV, H, W, 3)
+            ).reshape(NV, 3, H, W)
 
-            if all_bboxes is not None:
-                pix = util.bbox_sample(bboxes, args.ray_batch_size)
-                pix_inds = pix[..., 0] * H * W + pix[..., 1] * W + pix[..., 2]
-            else:
-                pix_inds = torch.randint(0, NV * H * W, (args.ray_batch_size,))
+            Hs = H * args.app_scale
+            Ws = W * args.app_scale
 
-            rgb_gt = rgb_gt_all[pix_inds]  # (ray_batch_size, 3)
-            rays = cam_rays.view(-1, cam_rays.shape[-1])[pix_inds].to(
-                device=device
-            )  # (ray_batch_size, 8)
+            rand_crop = RandomCrop(Hs, Ws)
+            rgb_gt = rand_crop(rgb_gt_all).reshape(-1, 3)
+            rays = rand_crop(cam_rays).reshape(-1, 8)
 
             all_rgb_gt.append(rgb_gt)
             all_rays.append(rays)
@@ -277,7 +277,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         return render_dict
 
-    def calc_losses(self, data, app_data, is_train=True, global_step=0):
+    def calc_losses(self, data, app_data, loss_dict, is_train=True, global_step=0):
         # Do some setup to establish rays and view images
         src_images, all_rays, all_rgb_gt = self.pass_setup(data, is_train=True, global_step=0)
 
@@ -291,12 +291,9 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         reg_render_dict = self.batch_pass(inview_app_imgs, all_rays)
 
-        # Render our scene using the appearance image we're trying to harmonize with
+        # Now, render out the scene using the appearance images as our encoding source
         app_imgs = app_data["images"].to(device=device)
         app_render_dict = self.batch_pass(app_imgs, all_rays)
-
-        # Loss information
-        loss_dict = {}
 
         # Compute our standard PixelNeRF loss
         coarse_reg = reg_render_dict.coarse
@@ -322,13 +319,18 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         density_app_loss *= self.lambda_density
         loss_dict["ad"] = density_app_loss.item()
 
+        # We need to reshape our color data into image patches to feed reference encoder
+        _, _, D, H, W = src_images.shape
+        Hs = H * self.app_scale
+        Ws = W * self.app_scale
         if using_fine_app:
-            ref_app_loss = self.ref_app_crit(fine_app.rgb, app_imgs) * self.lambda_ref
+            app_rgb = fine_app.rgb.reshape(-1, D, Hs, Ws)
+            ref_app_loss = self.ref_app_crit(app_rgb, app_imgs) * self.lambda_ref
         else:
-            ref_app_loss = self.ref_app_crit(coarse_app.rgb, app_imgs) * self.lambda_ref
+            app_rgb = coarse_app.rgb.reshape(-1, D, Hs, Ws)
+            ref_app_loss = self.ref_app_crit(app_rgb, app_imgs) * self.lambda_ref
         loss_dict["ar"] = ref_app_loss.item()
 
-        # Backprop time
         loss = rgb_loss_reg + density_app_loss + ref_app_loss
         if is_train:
             loss.backward()

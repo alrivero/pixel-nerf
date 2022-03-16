@@ -1,5 +1,6 @@
 import torch
 from contrib.model.unet_tile_se_norm import StyleEncoder
+from util.util import repeat_interleave
 
 class AlphaLossNV2(torch.nn.Module):
     """
@@ -109,6 +110,10 @@ class ReferenceColorLoss(torch.nn.Module):
     def forward(self, outputs, targets):
         outputs_encodings = self.ref_encoder(outputs)
         targets_encodings = self.ref_encoder(targets)
+
+        out_views = outputs_encodings.shape[0]
+        tar_views = targets_encodings.shape[0]
+        targets_encodings = repeat_interleave(out_views // tar_views)
 
         return self.ref_loss(outputs_encodings, targets_encodings)
 
