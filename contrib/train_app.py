@@ -240,8 +240,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 rgb_gt_all.permute(0, 2, 3, 1).contiguous().reshape(-1, 3)
             ).reshape(NV, 3, H, W)
 
-            Hs = H * args.app_scale
-            Ws = W * args.app_scale
+            Hs = int(H * args.app_scale)
+            Ws = int(W * args.app_scale)
             i = randint(0, H - Hs + 1)
             j = randint(0, W - Ws + 1)
 
