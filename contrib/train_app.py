@@ -303,6 +303,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         fine_reg = reg_render_dict.fine
         using_fine_reg = len(fine_reg) > 0
 
+        loss_dict = {}
+
         rgb_loss_reg = self.rgb_coarse_crit(coarse_reg.rgb, all_rgb_gt) * self.lambda_coarse
         loss_dict["rc"] = rgb_loss_reg.item()
         if using_fine_reg:
