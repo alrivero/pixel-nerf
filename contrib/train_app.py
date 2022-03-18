@@ -326,8 +326,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         # We need to reshape our color data into image patches to feed reference encoder
         _, _, D, H, W = src_images.shape
-        Hs = H * args.app_scale
-        Ws = W * args.app_scale
+        Hs = int(H * args.app_scale)
+        Ws = int(W * args.app_scale)
         if using_fine_app:
             app_rgb = fine_app.rgb.reshape(-1, D, Hs, Ws)
             ref_app_loss = self.ref_app_crit(app_rgb, app_imgs) * self.lambda_ref
