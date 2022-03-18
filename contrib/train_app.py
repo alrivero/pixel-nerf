@@ -259,8 +259,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             all_images, image_ord
         )  # (SB, NS, 3, H, W)
         src_poses = util.batched_index_select_nd(all_poses, image_ord)  # (SB, NS, 4, 4)
-        all_rays = util.batched_index_select_nd(all_rays, image_ord).reshape(-1, 8)
-        all_rgb_gt = util.batched_index_select_nd(all_rgb_gt, image_ord).reshape(-1, 3)
+        all_rays = util.batched_index_select_nd(all_rays, image_ord).reshape(SB, -1, 8)
+        all_rgb_gt = util.batched_index_select_nd(all_rgb_gt, image_ord).reshape(SB, -1, 3)
 
         all_bboxes = all_poses = all_images = None
 
