@@ -245,8 +245,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             i = randint(0, H - Hs + 1)
             j = randint(0, W - Ws + 1)
 
-            rgb_gt = crop(rgb_gt_all, i, j, Hs, Ws).reshape(-1, 3)
-            rays = crop(cam_rays, i, j, Hs, Ws).reshape(-1, 8)
+            rgb_gt = crop(rgb_gt_all, i, j, Hs, Ws)
+            rays = crop(cam_rays, i, j, Hs, Ws)
 
             all_rgb_gt.append(rgb_gt)
             all_rays.append(rays)
@@ -259,6 +259,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             all_images, image_ord
         )  # (SB, NS, 3, H, W)
         src_poses = util.batched_index_select_nd(all_poses, image_ord)  # (SB, NS, 4, 4)
+        all_rays = util.batched_index_select_nd(all_rays, image_ord).reshape(-1, 8)
+        all_rgb_gt = util.batched_index_select_nd(all_rgb_gt, image_ord).reshape(-1, 3)
 
         all_bboxes = all_poses = all_images = None
 
