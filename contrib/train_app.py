@@ -330,12 +330,11 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         Ws = int(W * args.app_scale)
         if using_fine_app:
             app_rgb = fine_app.rgb.reshape(-1, D, Hs, Ws)
-            app_rgb = torch.unsqueeze(app_rgb, 0)
             app_rgb = F.interpolate(app_rgb, size=(H, W), mode="area")
-            app_rgb = torch.squeeze(app_rgb, 0)
             ref_app_loss = self.ref_app_crit(app_rgb, app_imgs) * self.lambda_ref
         else:
             app_rgb = coarse_app.rgb.reshape(-1, D, Hs, Ws)
+            app_rgb = F.interpolate(app_rgb, size=(H, W), mode="area")
             ref_app_loss = self.ref_app_crit(app_rgb, app_imgs) * self.lambda_ref
         loss_dict["ar"] = ref_app_loss.item()
 
