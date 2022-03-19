@@ -547,17 +547,11 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                         else:
                             test_data = next(test_data_iter)
                             test_app_data = next(test_app_data_iter)
-                        rand_testview_ind = randint(0, len(test_data["images"]))
-                        testview_app_data = {
-                            "path": test_data["path"],
-                            "img_id": rand_testview_ind,
-                            "image": test_data["images"][rand_testview_ind],
-                        }
 
                         self.net.eval()
                         with torch.no_grad():
                             vis, vis_vals = self.vis_step(
-                                test_data, testview_app_data, global_step=step_id
+                                test_data, test_app_data, global_step=step_id
                             )
                             vis_app, vis_vals_app = self.vis_step(
                                 test_data, test_app_data, global_step=step_id
