@@ -242,8 +242,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
             Hs = int(H * args.app_scale)
             Ws = int(W * args.app_scale)
-            i = randint(0, H - Hs + 1)
-            j = randint(0, W - Ws + 1)
+            i = randint(0, H - Hs)
+            j = randint(0, W - Ws)
 
             rgb_gt = crop(rgb_gt_all, i, j, Hs, Ws)
             rays = crop(cam_rays, i, j, Hs, Ws)
