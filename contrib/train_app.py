@@ -401,7 +401,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 focal.to(device=device),
                 c=c.to(device=device) if c is not None else None,
             )
-            net.app_encoder.encode(app_data["images"])
+            app_imgs = app_data["images"].to(device=device)
+            net.app_encoder.encode(app_imgs)
             test_rays = test_rays.reshape(1, H * W, -1)
             render_dict = DotMap(render_par(test_rays, want_weights=True))
             coarse = render_dict.coarse
