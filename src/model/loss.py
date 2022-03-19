@@ -104,12 +104,14 @@ class ReferenceColorLoss(torch.nn.Module):
         for param in self.ref_encoder.parameters():
             param.requires_grad = False
         
-        
+        self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.ref_loss = torch.torch.nn.MSELoss()
     
     def forward(self, outputs, targets):
         outputs_encodings = self.ref_encoder(outputs)
         targets_encodings = self.ref_encoder(targets)
+        outputs_encodings = self.avg_pool(outputs_encodings)
+        targets_encodings = self.avg_pool(targets_encodings)
 
         out_views = outputs_encodings.shape[0]
         tar_views = targets_encodings.shape[0]
