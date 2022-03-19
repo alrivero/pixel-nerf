@@ -1,4 +1,5 @@
 import torch
+from torch import nn
 from contrib.model.unet_tile_se_norm import StyleEncoder
 from util.util import repeat_interleave
 
