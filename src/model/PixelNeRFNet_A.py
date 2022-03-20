@@ -6,7 +6,7 @@ from .resnetfc import ResnetFC
 from contrib.model.AppearanceEncoder import AppearanceEncoder
 import torch.autograd.profiler as profiler
 from util import repeat_interleave
-from torch.nn import init
+from torch import nn
 
 class PixelNeRFNet_A(PixelNeRFNet):
     # For now, identical to the PixelNeRF
@@ -56,8 +56,18 @@ class PixelNeRFNet_A(PixelNeRFNet):
                     ).format(model_path)
                 )
             return self
+        # Otherwise, initialize the weights for the encoder using Kaming Normal initialization
         elif self.use_app_encoder:
-            init_weights = lambda m : init.kaiming_normal_(m)
+            def init_weights(m):
+                if isinstance(m, (nn.Linear, nn.Conv2d)):
+                    nn.init.kaiming_normal_(m.weight)
+                    if m.bias.data is not None:
+                        m.bias.data.zero_()
+                elif isinstance(m, (nn.BatchNorm2d, nn.BatchNorm1d)):
+                    m.weight.data.fill_(1)
+                    if m.bias.data is not None:
+                        m.bias.data.zero_()
+            
             self.app_encoder.apply(init_weights)
         
         return self
