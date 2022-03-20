@@ -6,6 +6,7 @@ from .resnetfc import ResnetFC
 from contrib.model.AppearanceEncoder import AppearanceEncoder
 import torch.autograd.profiler as profiler
 from util import repeat_interleave
+from torch.nn import init
 
 class PixelNeRFNet_A(PixelNeRFNet):
     # For now, identical to the PixelNeRF
@@ -36,26 +37,29 @@ class PixelNeRFNet_A(PixelNeRFNet):
         self = super().load_weights(args, opt_init, strict, device)
 
         # Only load weights for our appearance encoder if we want to
-        if not args.load_app_encoder:
-            return
+        if args.load_app_encoder:
+            model_path = "%s/%s/%s" % (args.checkpoints_path, args.name, "app_encoder_init")
 
-        model_path = "%s/%s/%s" % (args.checkpoints_path, args.name, "app_encoder_init")
+            if device is None:
+                device = self.poses.device
 
-        if device is None:
-            device = self.poses.device
-
-        if os.path.exists(model_path):
-            print("Load (Appearance Encoder)", model_path)
-            self.app_encoder.load_state_dict(
-                torch.load(model_path, map_location=device), strict=True
-            )
-        else:
-            warnings.warn(
-                (
-                    "WARNING: {} does not exist, not loaded!! Apearance encoder will be re-initialized.\n"
-                    + "If you are trying to load a pretrained appearance encoder for PixelNeRF-A, STOP since it's not in the right place. "
-                ).format(model_path)
-            )
+            if os.path.exists(model_path):
+                print("Load (Appearance Encoder)", model_path)
+                self.app_encoder.load_state_dict(
+                    torch.load(model_path, map_location=device), strict=True
+                )
+            else:
+                warnings.warn(
+                    (
+                        "WARNING: {} does not exist, not loaded!! Apearance encoder will be re-initialized.\n"
+                        + "If you are trying to load a pretrained appearance encoder for PixelNeRF-A, STOP since it's not in the right place. "
+                    ).format(model_path)
+                )
+            return self
+        elif self.use_app_encoder:
+            init_weights = lambda m : init.kaiming_normal_(m)
+            self.app_encoder.apply(init_weights)
+        
         return self
     
     def forward(self, xyz, coarse=True, viewdirs=None, far=False):
