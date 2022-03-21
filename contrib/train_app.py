@@ -234,7 +234,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
             cam_rays = util.gen_rays(
                 poses, W, H, focal, self.z_near, self.z_far, c=c
-            ).reshape(NV, 8, H, W)
+            ).permute(0, 3, 1, 2)
             rgb_gt_all = images_0to1
             rgb_gt_all = (
                 rgb_gt_all.permute(0, 2, 3, 1).contiguous().reshape(-1, 3)
