@@ -395,7 +395,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         gt = images_0to1[view_dest].permute(1, 2, 0).cpu().numpy().reshape(H, W, 3)
         Wa = app_images.shape[-1]
-        app_gt = app_images_0to1[view_dest].permute(1, 2, 0).cpu().numpy().reshape(H, Wa, 3)
+        app_gt = app_images_0to1.permute(1, 2, 0).cpu().numpy().reshape(H, Wa, 3)
         with torch.no_grad():
             test_rays = cam_rays[view_dest]  # (H, W, 8)
             test_images = images[views_src]  # (NS, 3, H, W)
