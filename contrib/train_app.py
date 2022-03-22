@@ -548,11 +548,21 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                         else:
                             test_data = next(test_data_iter)
                             test_app_data = next(test_app_data_iter)
+                        
+                        # Render out the scene normally using an input view as our encoding source
+                        src_images = test_data["images"]
+                        rand_inview_ind = randint(0, len(src_images[0]) - 1)
+                        inview_app_imgs = src_images[0][rand_inview_ind].unsqueeze(0)
+                        for i in range(1, args.batch_size):
+                            rand_inview_ind = randint(0, len(src_images[i]) - 1)
+                            new_app_tensor = src_images[i][rand_inview_ind].unsqueeze(0)
+                            inview_app_imgs = torch.cat([inview_app_imgs, new_app_tensor], 0)
+                        testview_app_data = { "images": inview_app_imgs }
 
                         self.net.eval()
                         with torch.no_grad():
                             vis, vis_vals = self.vis_step(
-                                test_data, test_app_data, global_step=step_id
+                                test_data, testview_app_data, global_step=step_id
                             )
                             vis_app, vis_vals_app = self.vis_step(
                                 test_data, test_app_data, global_step=step_id
