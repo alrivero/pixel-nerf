@@ -363,7 +363,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             print(idx)
             batch_idx = idx
         images = data["images"][batch_idx].to(device=device)  # (NV, 3, H, W)
-        app_images = app_data["images"][batch_idx].to(device=device)  # (NV, 3, H, W)
+        app_images = app_data["images"].to(device=device)  # (B, 3, H, W)
         poses = data["poses"][batch_idx].to(device=device)  # (NV, 4, 4)
         focal = data["focal"][batch_idx : batch_idx + 1]  # (1)
         c = data.get("c")
@@ -395,7 +395,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         gt = images_0to1[view_dest].permute(1, 2, 0).cpu().numpy().reshape(H, W, 3)
         Wa = app_images.shape[-1]
-        app_gt = app_images_0to1.permute(1, 2, 0).cpu().numpy().reshape(H, Wa, 3)
+        app_gt = app_images_0to1[batch_idx].permute(1, 2, 0).cpu().numpy().reshape(H, Wa, 3)
         with torch.no_grad():
             test_rays = cam_rays[view_dest]  # (H, W, 8)
             test_images = images[views_src]  # (NS, 3, H, W)
