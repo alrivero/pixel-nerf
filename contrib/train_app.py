@@ -363,6 +363,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             print(idx)
             batch_idx = idx
         images = data["images"][batch_idx].to(device=device)  # (NV, 3, H, W)
+        app_images = app_data["images"][batch_idx].to(device=device)  # (NV, 3, H, W)
         poses = data["poses"][batch_idx].to(device=device)  # (NV, 4, 4)
         focal = data["focal"][batch_idx : batch_idx + 1]  # (1)
         c = data.get("c")
@@ -373,6 +374,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             poses, W, H, focal, self.z_near, self.z_far, c=c
         )  # (NV, H, W, 8)
         images_0to1 = images * 0.5 + 0.5  # (NV, 3, H, W)
+        app_images_0to1 = app_images * 0.5 + 0.5  # (NV, 3, H, W)
 
         curr_nviews = nviews[torch.randint(0, len(nviews), (1,)).item()]
         views_src = np.sort(np.random.choice(NV, curr_nviews, replace=False))
@@ -392,6 +394,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         )
 
         gt = images_0to1[view_dest].permute(1, 2, 0).cpu().numpy().reshape(H, W, 3)
+        Wa = app_images.shape[-1]
+        app_gt = app_images_0to1[view_dest].permute(1, 2, 0).cpu().numpy().reshape(H, Wa, 3)
         with torch.no_grad():
             test_rays = cam_rays[view_dest]  # (H, W, 8)
             test_images = images[views_src]  # (NS, 3, H, W)
@@ -401,8 +405,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 focal.to(device=device),
                 c=c.to(device=device) if c is not None else None,
             )
-            app_imgs = app_data["images"].to(device=device)
-            net.app_encoder.encode(app_imgs)
+            net.app_encoder.encode(app_images)
             test_rays = test_rays.reshape(1, H * W, -1)
             render_dict = DotMap(render_par(test_rays, want_weights=True))
             coarse = render_dict.coarse
@@ -433,6 +436,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             depth_coarse_cmap,
             rgb_coarse_np,
             alpha_coarse_cmap,
+            *app_gt
         ]
 
         vis_coarse = np.hstack(vis_list)
@@ -453,6 +457,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 depth_fine_cmap,
                 rgb_fine_np,
                 alpha_fine_cmap,
+                *app_gt
             ]
 
             vis_fine = np.hstack(vis_list)
