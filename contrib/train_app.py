@@ -436,7 +436,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             depth_coarse_cmap,
             rgb_coarse_np,
             alpha_coarse_cmap,
-            *app_gt
+            app_gt
         ]
 
         vis_coarse = np.hstack(vis_list)
@@ -457,7 +457,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 depth_fine_cmap,
                 rgb_fine_np,
                 alpha_fine_cmap,
-                *app_gt
+                app_gt
             ]
 
             vis_fine = np.hstack(vis_list)
