@@ -266,7 +266,9 @@ class ResnetFC_App(ResnetFC):
                     x = util.combine_interleaved(
                         x, combine_inner_dims, self.combine_type
                     )
-                    x = torch.cat((app_enc, x), dim=-1)
+                    B, D = app_enc.shape
+                    _, C, _ = x.shape
+                    x = torch.cat((app_enc.expand(B, C, D), x), dim=-1)
                     x = self.app_block(x)
 
                 if self.d_latent > 0 and blkid < self.combine_layer:
