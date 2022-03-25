@@ -46,7 +46,7 @@ class ResnetBlockFC(nn.Module):
         if size_in == size_out:
             self.shortcut = None
         else:
-            self.shortcut = nn.Linear(size_in, size_out, bias=False)
+            self.shortcut = nn.Linear(size_in, size_out, bias=True)
             nn.init.constant_(self.shortcut.bias, 0.0)
             nn.init.kaiming_normal_(self.shortcut.weight, a=0, mode="fan_in")
 
