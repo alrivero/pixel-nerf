@@ -196,3 +196,102 @@ class ResnetFC(nn.Module):
             use_spade=conf.get_bool("use_spade", False),
             **kwargs
         )
+
+class ResnetFC_App(ResnetFC):
+    def __init__(
+        self,
+        d_in,
+        d_out=4,
+        n_blocks=5,
+        d_latent=0,
+        d_hidden=128,
+        app_in=512,
+        beta=0.0,
+        combine_layer=1000,
+        combine_type="average",
+        use_spade=False,
+    ):
+        """
+        :param d_in input size
+        :param d_out output size
+        :param n_blocks number of Resnet blocks
+        :param d_latent latent size, added in each resnet block (0 = disable)
+        :param d_hidden hiddent dimension throughout network
+        :param beta softplus beta, 100 is reasonable; if <=0 uses ReLU activations instead
+        """
+        super().__init__(d_in, d_out, n_blocks, d_latent, d_hidden, beta, combine_layer, combine_type, use_spade)
+
+        size_in = self.blocks[self.combine_layer - 1].size_out + app_in
+        size_out = self.blocks[self.combine_layer].size_out
+        self.app_block = ResnetBlockFC(size_in, size_out, size_out, beta)
+    
+    def forward(self, zx, app_enc, combine_inner_dims=(1,), combine_index=None, dim_size=None):
+        """
+        :param zx (..., d_latent + d_in)
+        :param combine_inner_dims Combining dimensions for use with multiview inputs.
+        Tensor will be reshaped to (-1, combine_inner_dims, ...) and reduced using combine_type
+        on dim 1, at combine_layer
+        """
+        with profiler.record_function("resnetfc_infer"):
+            assert zx.size(-1) == self.d_latent + self.d_in
+            if self.d_latent > 0:
+                z = zx[..., : self.d_latent]
+                x = zx[..., self.d_latent :]
+            else:
+                x = zx
+            if self.d_in > 0:
+                x = self.lin_in(x)
+            else:
+                x = torch.zeros(self.d_hidden, device=zx.device)
+
+            for blkid in range(self.n_blocks):
+                if blkid == self.combine_layer:
+                    # The following implements camera frustum culling, requires torch_scatter
+                    #  if combine_index is not None:
+                    #      combine_type = (
+                    #          "mean"
+                    #          if self.combine_type == "average"
+                    #          else self.combine_type
+                    #      )
+                    #      if dim_size is not None:
+                    #          assert isinstance(dim_size, int)
+                    #      x = torch_scatter.scatter(
+                    #          x,
+                    #          combine_index,
+                    #          dim=0,
+                    #          dim_size=dim_size,
+                    #          reduce=combine_type,
+                    #      )
+                    #  else:
+                    x = util.combine_interleaved(
+                        x, combine_inner_dims, self.combine_type
+                    )
+                    x.torch.cat((app_enc, x), dim=-1)
+                    x = self.app_block(x)
+
+                if self.d_latent > 0 and blkid < self.combine_layer:
+                    tz = self.lin_z[blkid](z)
+                    if self.use_spade:
+                        sz = self.scale_z[blkid](z)
+                        x = sz * x + tz
+                    else:
+                        x = x + tz
+
+                x = self.blocks[blkid](x)
+            out = self.lin_out(self.activation(x))
+            return out
+
+    @classmethod
+    def from_conf(cls, conf, d_in, **kwargs):
+        # PyHocon construction
+        return cls(
+            d_in,
+            n_blocks=conf.get_int("n_blocks", 5),
+            d_hidden=conf.get_int("d_hidden", 128),
+            app_in=conf.get_int("app_in", 512),
+            beta=conf.get_float("beta", 0.0),
+            combine_layer=conf.get_int("combine_layer", 1000),
+            combine_type=conf.get_string("combine_type", "average"),  # average | max
+            use_spade=conf.get_bool("use_spade", False),
+            **kwargs
+        )

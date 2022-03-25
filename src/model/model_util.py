@@ -1,5 +1,5 @@
 from .encoder import SpatialEncoder, ImageEncoder
-from .resnetfc import ResnetFC
+from .resnetfc import ResnetFC, ResnetFC_App
 
 
 def make_mlp(conf, d_in, d_latent=0, allow_empty=False, **kwargs):
@@ -8,6 +8,8 @@ def make_mlp(conf, d_in, d_latent=0, allow_empty=False, **kwargs):
         net = ImplicitNet.from_conf(conf, d_in + d_latent, **kwargs)
     elif mlp_type == "resnet":
         net = ResnetFC.from_conf(conf, d_in, d_latent=d_latent, **kwargs)
+    elif mlp_type == "resnet_app":
+        net = ResnetFC_App.from_conf(conf, d_in, d_latent=d_latent, **kwargs)
     elif mlp_type == "empty" and allow_empty:
         net = None
     else:
