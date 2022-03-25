@@ -84,6 +84,12 @@ def extra_args(parser):
         help="Freeze appearance encoder weights and only train MLP",
     )
     parser.add_argument(
+        "--no_app_loss",
+        action="store_true",
+        default=None,
+        help="Will not compute apperance loss",
+    )
+    parser.add_argument(
         "--refencdir", "-DRE", type=str, default=None, help="Reference encoder directory (used for loss)"
     )
     parser.add_argument(
@@ -167,6 +173,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         self.z_far = dset.z_far
 
         self.use_bbox = args.no_bbox_step > 0
+        self.no_app_loss = args.no_app_loss
 
         # Add loading data for appearance images
         self.train_app_data_loader = torch.utils.data.DataLoader(
@@ -280,10 +287,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         return render_dict
 
-    def calc_losses(self, data, app_data, is_train=True, global_step=0):
-        # Do some setup to establish rays and view images
-        src_images, all_rays, all_rgb_gt = self.pass_setup(data, is_train=True, global_step=0)
-
+    def nerf_loss(self, src_images, all_rays, all_rgb_gt, loss_dict):
         # Render out the scene normally using an input view as our encoding source
         rand_inview_ind = randint(0, len(src_images[0]) - 1)
         inview_app_imgs = src_images[0][rand_inview_ind].unsqueeze(0)
@@ -294,16 +298,10 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         reg_render_dict = self.batch_pass(inview_app_imgs, all_rays)
 
-        # Now, render out the scene using the appearance images as our encoding source
-        app_imgs = app_data["images"].to(device=device)
-        app_render_dict = self.batch_pass(app_imgs, all_rays)
-
         # Compute our standard PixelNeRF loss
         coarse_reg = reg_render_dict.coarse
         fine_reg = reg_render_dict.fine
         using_fine_reg = len(fine_reg) > 0
-
-        loss_dict = {}
 
         rgb_loss_reg = self.rgb_coarse_crit(coarse_reg.rgb, all_rgb_gt) * self.lambda_coarse
         loss_dict["rc"] = rgb_loss_reg.item()
@@ -312,7 +310,17 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             rgb_loss_reg = rgb_loss_reg + fine_loss_reg * self.lambda_fine
             loss_dict["rf"] = fine_loss_reg.item() * self.lambda_fine
         
+        return rgb_loss_reg, reg_render_dict
+
+    def app_loss(self, app_data, all_rays, all_rgb_gt, src_images, reg_render_dict, loss_dict):
+        # Now, render out the scene using the appearance images as our encoding source
+        app_imgs = app_data["images"].to(device=device)
+        app_render_dict = self.batch_pass(app_imgs, all_rays)
+
         # Compute SSH reference encoder loss for appearance pass and density (depth) regularization
+        coarse_reg = reg_render_dict.coarse
+        fine_reg = reg_render_dict.fine
+
         coarse_app = app_render_dict.coarse
         fine_app = app_render_dict.fine
         using_fine_app = len(fine_app) > 0
@@ -338,7 +346,19 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             ref_app_loss = self.ref_app_crit(app_rgb, app_imgs) * self.lambda_ref
         loss_dict["ar"] = ref_app_loss.item()
 
-        loss = rgb_loss_reg + density_app_loss + ref_app_loss
+        return density_app_loss + ref_app_loss
+
+    def calc_losses(self, data, app_data, is_train=True, global_step=0):
+        # Do some setup to establish rays and view images
+        src_images, all_rays, all_rgb_gt = self.pass_setup(data, is_train, global_step)
+        loss_dict = {}
+
+        nerf_loss, reg_render_dict = self.nerf_loss(src_images, all_rays, all_rgb_gt, loss_dict)
+        loss = nerf_loss
+        if not self.no_app_loss:
+            app_loss = self.app_loss(app_data, all_rays, all_rgb_gt, src_images, reg_render_dict, loss_dict)
+            loss += app_loss
+
         if is_train:
             loss.backward()
         loss_dict["t"] = loss.item()
