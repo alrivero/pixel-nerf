@@ -42,9 +42,8 @@ class PixelNeRFNet_A(PixelNeRFNet):
                         + "If you are trying to load a pretrained appearance encoder for PixelNeRF-A, STOP since it's not in the right place. "
                     ).format(model_path)
                 )
-            return self
         # Otherwise, initialize the weights for the encoder using Kaming Normal initialization
-        elif self.use_app_encoder:
+        else:
             def init_weights(m):
                 if isinstance(m, (nn.Linear, nn.Conv2d)):
                     nn.init.kaiming_normal_(m.weight)
@@ -54,7 +53,7 @@ class PixelNeRFNet_A(PixelNeRFNet):
                     m.weight.data.fill_(1)
                     if m.bias.data is not None:
                         m.bias.data.zero_()
-            
+                
             self.app_encoder.apply(init_weights)
         
         return self
