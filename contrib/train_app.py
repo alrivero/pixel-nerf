@@ -184,7 +184,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         self.z_far = dset.z_far
 
         self.use_bbox = args.no_bbox_step > 0
-        self.no_app_loss = args.no_app_loss
+        self.app_enc_off = args.app_enc_off
         
         self.pass_setup = self.patch_pass_setup if args.app_enc_off else self.rand_pass_setup
 
@@ -442,7 +442,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         nerf_loss, reg_render_dict = self.nerf_loss(src_images, all_rays, all_rgb_gt, loss_dict)
         loss = nerf_loss
-        if not self.no_app_loss:
+        if not self.app_enc_off:
             app_loss = self.app_loss(app_data, all_rays, all_rgb_gt, src_images, reg_render_dict, loss_dict)
             loss += app_loss
 
