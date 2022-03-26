@@ -191,7 +191,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         self.use_bbox = args.no_bbox_step > 0
 
         self.app_enc_off = args.app_enc_off
-        self.pass_setup = self.patch_pass_setup if args.app_enc_off else self.rand_pass_setup
+        self.pass_setup = self.rand_pass_setup if args.app_enc_off else self.patch_pass_setup
 
         # Add loading data for appearance images
         if not self.app_enc_off:
@@ -577,8 +577,15 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 depth_fine_cmap,
                 rgb_fine_np,
                 alpha_fine_cmap,
-                app_gt
             ]
+
+            if app_data is not None:
+                app_images = app_data["images"].to(device=device)  # (B, 3, H, W)
+                app_images_0to1 = app_images * 0.5 + 0.5  # (NV, 3, H, W)
+                Wa = app_images.shape[-1]
+                app_gt = app_images_0to1[batch_idx].permute(1, 2, 0).cpu().numpy().reshape(H, Wa, 3)
+
+                vis_list.append(app_gt)
 
             vis_fine = np.hstack(vis_list)
             vis = np.vstack((vis_coarse, vis_fine))
