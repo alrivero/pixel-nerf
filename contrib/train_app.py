@@ -695,31 +695,36 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                             else:
                                 test_app_data = next(test_app_data_iter)
                         
-                        # Render out the scene normally using an input view as our encoding source
-                        src_images = test_data["images"]
-                        rand_inview_ind = randint(0, len(src_images[0]) - 1)
-                        inview_app_imgs = src_images[0][rand_inview_ind].unsqueeze(0)
-                        for i in range(1, args.batch_size):
-                            rand_inview_ind = randint(0, len(src_images[i]) - 1)
-                            new_app_tensor = src_images[i][rand_inview_ind].unsqueeze(0)
-                            inview_app_imgs = torch.cat([inview_app_imgs, new_app_tensor], 0)
-                        testview_app_data = { "images": inview_app_imgs }
+                        # Render out the scene normally using an input view as our encoding source if necessary
+                        if self.app_enc_off:
+                            testview_app_data = None
+                        else:
+                            src_images = test_data["images"]
+                            rand_inview_ind = randint(0, len(src_images[0]) - 1)
+                            inview_app_imgs = src_images[0][rand_inview_ind].unsqueeze(0)
+                            for i in range(1, args.batch_size):
+                                rand_inview_ind = randint(0, len(src_images[i]) - 1)
+                                new_app_tensor = src_images[i][rand_inview_ind].unsqueeze(0)
+                                inview_app_imgs = torch.cat([inview_app_imgs, new_app_tensor], 0)
+                            testview_app_data = { "images": inview_app_imgs }
 
                         self.net.eval()
                         with torch.no_grad():
                             vis, vis_vals = self.vis_step(
                                 test_data, testview_app_data, global_step=step_id
                             )
-                            vis_app, vis_vals_app = self.vis_step(
-                                test_data, test_app_data, global_step=step_id
-                            )
+                            if not self.app_enc_off:
+                                vis_app, vis_vals_app = self.vis_step(
+                                    test_data, test_app_data, global_step=step_id
+                                )
                         if vis_vals is not None:
                             self.writer.add_scalars(
                                 "vis", vis_vals, global_step=step_id
                             )
-                            self.writer.add_scalars(
-                                "vis_app", vis_vals_app, global_step=step_id
-                            )
+                            if not self.app_enc_off:
+                                self.writer.add_scalars(
+                                    "vis_app", vis_vals_app, global_step=step_id
+                                )
                         self.net.train()
                         if vis is not None:
                             import imageio
@@ -732,17 +737,18 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                                 ),
                                 vis_u8,
                             )
-                        if vis_app is not None:
-                            import imageio
+                        if not self.app_enc_off:
+                            if vis_app is not None:
+                                import imageio
 
-                            vis_u8_app = (vis_app * 255).astype(np.uint8)
-                            imageio.imwrite(
-                                os.path.join(
-                                    self.visual_path,
-                                    "{:04}_{:04}_vis_app.png".format(epoch, batch),
-                                ),
-                                vis_u8_app,
-                            )
+                                vis_u8_app = (vis_app * 255).astype(np.uint8)
+                                imageio.imwrite(
+                                    os.path.join(
+                                        self.visual_path,
+                                        "{:04}_{:04}_vis_app.png".format(epoch, batch),
+                                    ),
+                                    vis_u8_app,
+                                )
                     if (
                         batch == self.num_total_batches - 1
                         or batch % self.accu_grad == self.accu_grad - 1
