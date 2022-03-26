@@ -1,7 +1,7 @@
 import torch
 import os
+import os.path as osp
 import warnings
-from .models import PixelNeRFNet
 from .model_util import make_encoder, make_mlp
 from .encoder import ImageEncoder
 from .code import PositionalEncoding
@@ -10,7 +10,7 @@ import torch.autograd.profiler as profiler
 from util import repeat_interleave
 from torch import nn
 
-class PixelNeRFNet_A(PixelNeRFNet):
+class PixelNeRFNet_A(torch.nn.Module):
     # For now, identical to the PixelNeRF
     def __init__(self, conf, stop_encoder_grad=False, stop_app_encoder_grad=False, stop_f1_grad=False, app_enc_off=False):
         """
@@ -102,51 +102,64 @@ class PixelNeRFNet_A(PixelNeRFNet):
         if not self.app_enc_off:
             self.stop_app_encoder_grad = stop_app_encoder_grad
             self.app_encoder = AppearanceEncoder(conf["app_encoder"])
-    
-    def load_weights(self, args, opt_init=False, strict=False, device=None):
-        """
-        Helper for loading weights according to argparse arguments.
-        Your can put a checkpoint at checkpoints/<exp>/pixel_nerf_init to use as initialization.
-        :param opt_init if true, loads from init checkpoint instead of usual even when resuming
-        """
-        self = super().load_weights(args, opt_init, strict, device)
-        if self.app_enc_off:
-            return
-        
-        # Only load weights for our appearance encoder if we want to
-        if args.load_app_encoder:
-            model_path = "%s/%s/%s" % (args.checkpoints_path, args.name, "app_encoder_init")
 
-            if device is None:
-                device = self.poses.device
-
-            if os.path.exists(model_path):
-                print("Load (Appearance Encoder)", model_path)
-                self.app_encoder.load_state_dict(
-                    torch.load(model_path, map_location=device), strict=True
-                )
-            else:
-                warnings.warn(
-                    (
-                        "WARNING: {} does not exist, not loaded!! Apearance encoder will be re-initialized.\n"
-                        + "If you are trying to load a pretrained appearance encoder for PixelNeRF-A, STOP since it's not in the right place. "
-                    ).format(model_path)
-                )
-        # Otherwise, initialize the weights for the encoder using Kaming Normal initialization
+    def encode(self, images, poses, focal, z_bounds=None, c=None):
+        """
+        :param images (NS, 3, H, W)
+        NS is number of input (aka source or reference) views
+        :param poses (NS, 4, 4)
+        :param focal focal length () or (2) or (NS) or (NS, 2) [fx, fy]
+        :param z_bounds ignored argument (used in the past)
+        :param c principal point None or () or (2) or (NS) or (NS, 2) [cx, cy],
+        default is center of image
+        """
+        self.num_objs = images.size(0)
+        if len(images.shape) == 5:
+            assert len(poses.shape) == 4
+            assert poses.size(1) == images.size(
+                1
+            )  # Be consistent with NS = num input views
+            self.num_views_per_obj = images.size(1)
+            images = images.reshape(-1, *images.shape[2:])
+            poses = poses.reshape(-1, 4, 4)
         else:
-            def init_weights(m):
-                if isinstance(m, (nn.Linear, nn.Conv2d)):
-                    nn.init.kaiming_normal_(m.weight)
-                    if m.bias.data is not None:
-                        m.bias.data.zero_()
-                elif isinstance(m, (nn.BatchNorm2d, nn.BatchNorm1d)):
-                    m.weight.data.fill_(1)
-                    if m.bias.data is not None:
-                        m.bias.data.zero_()
-                
-            self.app_encoder.apply(init_weights)
-        
-        return self
+            self.num_views_per_obj = 1
+
+        self.encoder(images)
+        rot = poses[:, :3, :3].transpose(1, 2)  # (B, 3, 3)
+        trans = -torch.bmm(rot, poses[:, :3, 3:])  # (B, 3, 1)
+        self.poses = torch.cat((rot, trans), dim=-1)  # (B, 3, 4)
+
+        self.image_shape[0] = images.shape[-1]
+        self.image_shape[1] = images.shape[-2]
+
+        # Handle various focal length/principal point formats
+        if len(focal.shape) == 0:
+            # Scalar: fx = fy = value for all views
+            focal = focal[None, None].repeat((1, 2))
+        elif len(focal.shape) == 1:
+            # Vector f: fx = fy = f_i *for view i*
+            # Length should match NS (or 1 for broadcast)
+            focal = focal.unsqueeze(-1).repeat((1, 2))
+        else:
+            focal = focal.clone()
+        self.focal = focal.float()
+        self.focal[..., 1] *= -1.0
+
+        if c is None:
+            # Default principal point is center of image
+            c = (self.image_shape * 0.5).unsqueeze(0)
+        elif len(c.shape) == 0:
+            # Scalar: cx = cy = value for all views
+            c = c[None, None].repeat((1, 2))
+        elif len(c.shape) == 1:
+            # Vector c: cx = cy = c_i *for view i*
+            c = c.unsqueeze(-1).repeat((1, 2))
+        self.c = c
+
+        if self.use_global_encoder:
+            self.global_encoder(images)
+
     
     def forward(self, xyz, coarse=True, viewdirs=None, far=False):
         """
@@ -278,3 +291,95 @@ class PixelNeRFNet_A(PixelNeRFNet):
             output = torch.cat(output_list, dim=-1)
             output = output.reshape(SB, B, -1)
         return output
+
+    def load_weights(self, args, opt_init=False, strict=False, device=None):
+        """
+        Helper for loading weights according to argparse arguments.
+        Your can put a checkpoint at checkpoints/<exp>/pixel_nerf_init to use as initialization.
+        :param opt_init if true, loads from init checkpoint instead of usual even when resuming
+        """
+        """
+        Helper for loading weights according to argparse arguments.
+        Your can put a checkpoint at checkpoints/<exp>/pixel_nerf_init to use as initialization.
+        :param opt_init if true, loads from init checkpoint instead of usual even when resuming
+        """
+        # TODO: make backups
+        if opt_init and not args.resume:
+            return
+        ckpt_name = (
+            "pixel_nerf_init" if opt_init or not args.resume else "pixel_nerf_latest"
+        )
+        model_path = "%s/%s/%s" % (args.checkpoints_path, args.name, ckpt_name)
+
+        if device is None:
+            device = self.poses.device
+
+        if os.path.exists(model_path):
+            print("Load", model_path)
+            self.load_state_dict(
+                torch.load(model_path, map_location=device), strict=strict
+            )
+        elif not opt_init:
+            warnings.warn(
+                (
+                    "WARNING: {} does not exist, not loaded!! Model will be re-initialized.\n"
+                    + "If you are trying to load a pretrained model, STOP since it's not in the right place. "
+                    + "If training, unless you are startin a new experiment, please remember to pass --resume."
+                ).format(model_path)
+            )
+        
+        if self.app_enc_off:
+            return
+        
+        # Only load weights for our appearance encoder if we want to
+        if args.load_app_encoder:
+            model_path = "%s/%s/%s" % (args.checkpoints_path, args.name, "app_encoder_init")
+
+            if device is None:
+                device = self.poses.device
+
+            if os.path.exists(model_path):
+                print("Load (Appearance Encoder)", model_path)
+                self.app_encoder.load_state_dict(
+                    torch.load(model_path, map_location=device), strict=True
+                )
+            else:
+                warnings.warn(
+                    (
+                        "WARNING: {} does not exist, not loaded!! Apearance encoder will be re-initialized.\n"
+                        + "If you are trying to load a pretrained appearance encoder for PixelNeRF-A, STOP since it's not in the right place. "
+                    ).format(model_path)
+                )
+        # Otherwise, initialize the weights for the encoder using Kaming Normal initialization
+        else:
+            def init_weights(m):
+                if isinstance(m, (nn.Linear, nn.Conv2d)):
+                    nn.init.kaiming_normal_(m.weight)
+                    if m.bias.data is not None:
+                        m.bias.data.zero_()
+                elif isinstance(m, (nn.BatchNorm2d, nn.BatchNorm1d)):
+                    m.weight.data.fill_(1)
+                    if m.bias.data is not None:
+                        m.bias.data.zero_()
+                
+            self.app_encoder.apply(init_weights)
+        
+        return self
+
+    def save_weights(self, args, opt_init=False):
+        """
+        Helper for saving weights according to argparse arguments
+        :param opt_init if true, saves from init checkpoint instead of usual
+        """
+        from shutil import copyfile
+
+        ckpt_name = "pixel_nerf_init" if opt_init else "pixel_nerf_latest"
+        backup_name = "pixel_nerf_init_backup" if opt_init else "pixel_nerf_backup"
+
+        ckpt_path = osp.join(args.checkpoints_path, args.name, ckpt_name)
+        ckpt_backup_path = osp.join(args.checkpoints_path, args.name, backup_name)
+
+        if osp.exists(ckpt_path):
+            copyfile(ckpt_path, ckpt_backup_path)
+        torch.save(self.state_dict(), ckpt_path)
+        return self
