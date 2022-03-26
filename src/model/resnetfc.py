@@ -210,6 +210,8 @@ class ResnetFC_App(ResnetFC):
         combine_layer=1000,
         combine_type="average",
         use_spade=False,
+        stop_f1_grad=False,
+        app_enc_off=False
     ):
         """
         :param d_in input size
@@ -224,6 +226,9 @@ class ResnetFC_App(ResnetFC):
         size_in = self.blocks[self.combine_layer - 1].size_out + app_in
         size_out = self.blocks[self.combine_layer].size_out
         self.app_block = ResnetBlockFC(size_in, size_out, size_out, beta)
+
+        self.stop_f1_grad = stop_f1_grad
+        self.app_enc_off = app_enc_off
     
     def forward(self, zx, app_enc, combine_inner_dims=(1,), combine_index=None, dim_size=None):
         """
@@ -266,10 +271,14 @@ class ResnetFC_App(ResnetFC):
                     x = util.combine_interleaved(
                         x, combine_inner_dims, self.combine_type
                     )
-                    B, D = app_enc.shape
-                    _, C, _ = x.shape
-                    x = torch.cat((app_enc.expand(B, C, D), x), dim=-1)
-                    x = self.app_block(x)
+                    if self.stop_f1_grad:
+                        x = x.detach()
+
+                    if not self.app_enc_off:
+                        B, D = app_enc.shape
+                        _, C, _ = x.shape
+                        x = torch.cat((app_enc.expand(B, C, D), x), dim=-1)
+                        x = self.app_block(x)
 
                 if self.d_latent > 0 and blkid < self.combine_layer:
                     tz = self.lin_z[blkid](z)

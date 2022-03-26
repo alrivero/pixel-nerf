@@ -4,6 +4,7 @@
 import imp
 import sys
 import os
+from unittest.mock import patch
 
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -71,6 +72,12 @@ def extra_args(parser):
         default=None,
         help="Appearance format, eth3d (only for now)",
     )
+    parser.add_argument( # 
+        "--app_enc_off",
+        action="store_true",
+        default=None,
+        help="Remove appearance encoder and MLP block within the network",
+    )
     parser.add_argument(
         "--load_app_encoder",
         action="store_true",
@@ -84,10 +91,10 @@ def extra_args(parser):
         help="Freeze appearance encoder weights and only train MLP",
     )
     parser.add_argument(
-        "--no_app_loss",
+        "--freeze_f1",
         action="store_true",
         default=None,
-        help="Will not compute apperance loss",
+        help="Freeze first multi-view network weights and only train later MLP",
     )
     parser.add_argument(
         "--refencdir", "-DRE", type=str, default=None, help="Reference encoder directory (used for loss)"
@@ -113,9 +120,13 @@ print(
     "dset z_near {}, z_far {}, lindisp {}".format(dset.z_near, dset.z_far, dset.lindisp)
 )
 
-net = make_model(conf["model"]).to(device=device)
-net.stop_encoder_grad = args.freeze_enc
-net.stop_app_encoder_grad = args.freeze_app_enc
+net = make_model(
+    conf["model"],
+    stop_encoder_grad=args.freeze_enc,
+    stop_app_encoder_grad=args.freeze_app_enc,
+    stop_f1_grad=args.freeze_f1,
+    app_enc_off=args.app_enc_off
+).to(device=device)
 if args.freeze_enc:
     print("Encoder frozen")
     net.encoder.eval()
@@ -174,6 +185,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         self.use_bbox = args.no_bbox_step > 0
         self.no_app_loss = args.no_app_loss
+        
+        self.pass_setup = self.patch_pass_setup if args.app_enc_off else self.rand_pass_setup
 
         # Add loading data for appearance images
         self.train_app_data_loader = torch.utils.data.DataLoader(
@@ -197,7 +210,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
     def extra_save_state(self):
         torch.save(renderer.state_dict(), self.renderer_state_path)
 
-    def pass_setup(self, data, is_train=True, global_step=0):
+    def rand_pass_setup(self, data, is_train=True, global_step=0):
         if "images" not in data:
             return {}
         all_images = data["images"].to(device=device)  # (SB, NV, 3, H, W)
@@ -241,6 +254,80 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
             cam_rays = util.gen_rays(
                 poses, W, H, focal, self.z_near, self.z_far, c=c
+            )  # (NV, H, W, 8)
+            rgb_gt_all = images_0to1
+            rgb_gt_all = (
+                rgb_gt_all.permute(0, 2, 3, 1).contiguous().reshape(-1, 3)
+            )  # (NV, H, W, 3)
+
+            if all_bboxes is not None:
+                pix = util.bbox_sample(bboxes, args.ray_batch_size)
+                pix_inds = pix[..., 0] * H * W + pix[..., 1] * W + pix[..., 2]
+            else:
+                pix_inds = torch.randint(0, NV * H * W, (args.ray_batch_size,))
+
+            rgb_gt = rgb_gt_all[pix_inds]  # (ray_batch_size, 3)
+            rays = cam_rays.view(-1, cam_rays.shape[-1])[pix_inds].to(
+                device=device
+            )  # (ray_batch_size, 8)
+
+            all_rgb_gt.append(rgb_gt)
+            all_rays.append(rays)
+
+        all_rgb_gt = torch.stack(all_rgb_gt)  # (SB, ray_batch_size, 3)
+        all_rays = torch.stack(all_rays)  # (SB, ray_batch_size, 8)
+
+        image_ord = image_ord.to(device)
+        src_images = util.batched_index_select_nd(
+            all_images, image_ord
+        )  # (SB, NS, 3, H, W)
+        src_poses = util.batched_index_select_nd(all_poses, image_ord)  # (SB, NS, 4, 4)
+
+        all_bboxes = all_poses = all_images = None
+
+        net.encode(
+            src_images,
+            src_poses,
+            all_focals.to(device=device),
+            c=all_c.to(device=device) if all_c is not None else None,
+        )
+
+        return src_images, all_rays, all_rgb_gt
+
+    def patch_pass_setup(self, data, is_train=True, global_step=0):
+        if "images" not in data:
+            return {}
+        all_images = data["images"].to(device=device)  # (SB, NV, 3, H, W)
+
+        SB, NV, _, H, W = all_images.shape
+        all_poses = data["poses"].to(device=device)  # (SB, NV, 4, 4)
+        all_focals = data["focal"]  # (SB)
+        all_c = data.get("c")  # (SB)
+
+        all_rgb_gt = []
+        all_rays = []
+
+        curr_nviews = nviews[torch.randint(0, len(nviews), ()).item()]
+        if curr_nviews == 1:
+            image_ord = torch.randint(0, NV, (SB, 1))
+        else:
+            image_ord = torch.empty((SB, curr_nviews), dtype=torch.long)
+        for obj_idx in range(SB):
+            images = all_images[obj_idx]  # (NV, 3, H, W)
+            poses = all_poses[obj_idx]  # (NV, 4, 4)
+            focal = all_focals[obj_idx]
+            c = None
+            if "c" in data:
+                c = data["c"][obj_idx]
+            if curr_nviews > 1:
+                # Somewhat inefficient, don't know better way
+                image_ord[obj_idx] = torch.from_numpy(
+                    np.random.choice(NV, curr_nviews, replace=False)
+                )
+            images_0to1 = images * 0.5 + 0.5
+
+            cam_rays = util.gen_rays(
+                poses, W, H, focal, self.z_near, self.z_far, c=c
             ).permute(0, 3, 1, 2)
             rgb_gt_all = images_0to1
             rgb_gt_all = (
@@ -269,7 +356,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         all_rays = util.batched_index_select_nd(all_rays, image_ord).reshape(SB, -1, 8)
         all_rgb_gt = util.batched_index_select_nd(all_rgb_gt, image_ord).reshape(SB, -1, 3)
 
-        all_bboxes = all_poses = all_images = None
+        all_poses = all_images = None
 
         net.encode(
             src_images,
