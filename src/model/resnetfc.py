@@ -223,12 +223,14 @@ class ResnetFC_App(ResnetFC):
         """
         super().__init__(d_in, d_out, n_blocks, d_latent, d_hidden, beta, combine_layer, combine_type, use_spade)
 
-        size_in = self.blocks[self.combine_layer - 1].size_out + app_in
-        size_out = self.blocks[self.combine_layer].size_out
-        self.app_block = ResnetBlockFC(size_in, size_out, size_out, beta)
-
         self.stop_f1_grad = stop_f1_grad
+
         self.app_enc_off = app_enc_off
+        if self.app_enc_off:
+            size_in = self.blocks[self.combine_layer - 1].size_out + app_in
+            size_out = self.blocks[self.combine_layer].size_out
+            self.app_block = ResnetBlockFC(size_in, size_out, size_out, beta)
+
     
     def forward(self, zx, app_enc, combine_inner_dims=(1,), combine_index=None, dim_size=None):
         """

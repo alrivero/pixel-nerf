@@ -13,6 +13,9 @@ import warnings
 
 
 class PixelNeRFNet(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
     def __init__(self, conf, stop_encoder_grad=False):
         """
         :param conf PyHocon config subtree 'model'

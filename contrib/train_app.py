@@ -127,12 +127,19 @@ net = make_model(
     stop_f1_grad=args.freeze_f1,
     app_enc_off=args.app_enc_off
 ).to(device=device)
+
+
 if args.freeze_enc:
     print("Encoder frozen")
     net.encoder.eval()
-if args.freeze_app_enc:
-    print("Appearance encoder frozen")
-    net.app_encoder.eval()
+
+if args.app_enc_off:
+    print("Appearance encoder off")
+else:
+    print("Appearance encoder on")
+    if args.freeze_app_enc:
+        print("Appearance encoder weights frozen")
+        net.app_encoder.eval()
 
 renderer = NeRFRenderer.from_conf(conf["renderer"], lindisp=dset.lindisp,).to(
     device=device
@@ -140,7 +147,6 @@ renderer = NeRFRenderer.from_conf(conf["renderer"], lindisp=dset.lindisp,).to(
 
 # Parallize
 render_par = renderer.bind_parallel(net, args.gpu_id).eval()
-
 nviews = list(map(int, args.nviews.split()))
 
 

@@ -13,16 +13,95 @@ from torch import nn
 class PixelNeRFNet_A(PixelNeRFNet):
     # For now, identical to the PixelNeRF
     def __init__(self, conf, stop_encoder_grad=False, stop_app_encoder_grad=False, stop_f1_grad=False, app_enc_off=False):
-        super().__init__(conf, stop_encoder_grad)
+        """
+        :param conf PyHocon config subtree 'model'
+        """
+        super().__init__()
+        self.encoder = make_encoder(conf["encoder"])
+        self.use_encoder = conf.get_bool("use_encoder", True)  # Image features?
+
+        self.use_xyz = conf.get_bool("use_xyz", False)
+
+        assert self.use_encoder or self.use_xyz  # Must use some feature..
+
+        # Whether to shift z to align in canonical frame.
+        # So that all objects, regardless of camera distance to center, will
+        # be centered at z=0.
+        # Only makes sense in ShapeNet-type setting.
+        self.normalize_z = conf.get_bool("normalize_z", True)
+
+        self.stop_encoder_grad = (
+            stop_encoder_grad  # Stop ConvNet gradient (freeze weights)
+        )
+        self.use_code = conf.get_bool("use_code", False)  # Positional encoding
+        self.use_code_viewdirs = conf.get_bool(
+            "use_code_viewdirs", True
+        )  # Positional encoding applies to viewdirs
+
+        # Enable view directions
+        self.use_viewdirs = conf.get_bool("use_viewdirs", False)
+
+        # Global image features?
+        self.use_global_encoder = conf.get_bool("use_global_encoder", False)
+
+        d_latent = self.encoder.latent_size if self.use_encoder else 0
+        d_in = 3 if self.use_xyz else 1
+
+        if self.use_viewdirs and self.use_code_viewdirs:
+            # Apply positional encoding to viewdirs
+            d_in += 3
+        if self.use_code and d_in > 0:
+            # Positional encoding for x,y,z OR view z
+            self.code = PositionalEncoding.from_conf(conf["code"], d_in=d_in)
+            d_in = self.code.d_out
+        if self.use_viewdirs and not self.use_code_viewdirs:
+            # Don't apply positional encoding to viewdirs (concat after encoded)
+            d_in += 3
+
+        if self.use_global_encoder:
+            # Global image feature
+            self.global_encoder = ImageEncoder.from_conf(conf["global_encoder"])
+            self.global_latent_size = self.global_encoder.latent_size
+            d_latent += self.global_latent_size
+
+        d_out = 4
+
+        self.latent_size = self.encoder.latent_size
+        self.mlp_coarse = make_mlp(
+            conf["mlp_coarse"], 
+            d_in, d_latent, 
+            d_out=d_out, 
+            stop_f1_grad=stop_f1_grad,
+            app_enc_off=app_enc_off
+        )
+        self.mlp_fine = make_mlp(
+            conf["mlp_fine"], 
+            d_in, 
+            d_latent, 
+            d_out=d_out, 
+            allow_empty=True, 
+            stop_f1_grad=stop_f1_grad,
+            app_enc_off=app_enc_off
+        )
+        # Note: this is world -> camera, and bottom row is omitted
+        self.register_buffer("poses", torch.empty(1, 3, 4), persistent=False)
+        self.register_buffer("image_shape", torch.empty(2), persistent=False)
+
+        self.d_in = d_in
+        self.d_out = d_out
+        self.d_latent = d_latent
+        self.register_buffer("focal", torch.empty(1, 2), persistent=False)
+        # Principal point
+        self.register_buffer("c", torch.empty(1, 2), persistent=False)
+
+        self.num_objs = 0
+        self.num_views_per_obj = 1
 
         # Appearance encoder additions
-        self.stop_app_encoder_grad = stop_app_encoder_grad
-        self.app_encoder = AppearanceEncoder(conf["app_encoder"])
-
-        self.mlp_coarse.stop_f1_grad = stop_f1_grad
-        self.mlp_fine.stop_f1_grad = stop_f1_grad
-        self.mlp_coarse.app_enc_off = app_enc_off
-        self.mlp_fine.stop_f1_grad = app_enc_off
+        self.app_enc_off = app_enc_off
+        if not self.app_enc_off:
+            self.stop_app_encoder_grad = stop_app_encoder_grad
+            self.app_encoder = AppearanceEncoder(conf["app_encoder"])
     
     def load_weights(self, args, opt_init=False, strict=False, device=None):
         """
@@ -31,7 +110,9 @@ class PixelNeRFNet_A(PixelNeRFNet):
         :param opt_init if true, loads from init checkpoint instead of usual even when resuming
         """
         self = super().load_weights(args, opt_init, strict, device)
-
+        if self.app_enc_off:
+            return
+        
         # Only load weights for our appearance encoder if we want to
         if args.load_app_encoder:
             model_path = "%s/%s/%s" % (args.checkpoints_path, args.name, "app_encoder_init")
@@ -159,9 +240,11 @@ class PixelNeRFNet_A(PixelNeRFNet):
                 mlp_input = torch.cat((global_latent, mlp_input), dim=-1)
             
             # Added appearance encoder as input to MLP
-            app_enc = self.app_encoder.app_encoding
-            if self.stop_app_encoder_grad:
-                app_enc = app_enc.detach()
+            app_enc = None
+            if not self.app_enc_off:
+                app_enc = self.app_encoder.app_encoding
+                if self.stop_app_encoder_grad:
+                    app_enc = app_enc.detach()
 
             # Camera frustum culling stuff, currently disabled
             combine_index = None
