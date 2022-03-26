@@ -179,7 +179,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         self.density_app_crit = loss.get_density_loss(density_loss_conf)
         self.ref_app_crit = loss.ReferenceColorLoss(conf, args.refencdir).to(device=device)
 
-
         if args.resume:
             if os.path.exists(self.renderer_state_path):
                 renderer.load_state_dict(
@@ -190,25 +189,26 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         self.z_far = dset.z_far
 
         self.use_bbox = args.no_bbox_step > 0
+
         self.app_enc_off = args.app_enc_off
-        
         self.pass_setup = self.patch_pass_setup if args.app_enc_off else self.rand_pass_setup
 
         # Add loading data for appearance images
-        self.train_app_data_loader = torch.utils.data.DataLoader(
-            dset_app,
-            batch_size=args.batch_size,
-            shuffle=True,
-            num_workers=8,
-            pin_memory=False,
-        )
-        self.test_app_data_loader = torch.utils.data.DataLoader(
-            val_dset_app,
-            batch_size=min(args.batch_size, 16),
-            shuffle=True,
-            num_workers=4,
-            pin_memory=False,
-        )
+        if not self.app_enc_off:
+            self.train_app_data_loader = torch.utils.data.DataLoader(
+                dset_app,
+                batch_size=args.batch_size,
+                shuffle=True,
+                num_workers=8,
+                pin_memory=False,
+            )
+            self.test_app_data_loader = torch.utils.data.DataLoader(
+                val_dset_app,
+                batch_size=min(args.batch_size, 16),
+                shuffle=True,
+                num_workers=4,
+                pin_memory=False,
+            )
 
     def post_batch(self, epoch, batch):
         renderer.sched_step(args.batch_size)
@@ -479,7 +479,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             print(idx)
             batch_idx = idx
         images = data["images"][batch_idx].to(device=device)  # (NV, 3, H, W)
-        app_images = app_data["images"].to(device=device)  # (B, 3, H, W)
         poses = data["poses"][batch_idx].to(device=device)  # (NV, 4, 4)
         focal = data["focal"][batch_idx : batch_idx + 1]  # (1)
         c = data.get("c")
@@ -490,7 +489,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             poses, W, H, focal, self.z_near, self.z_far, c=c
         )  # (NV, H, W, 8)
         images_0to1 = images * 0.5 + 0.5  # (NV, 3, H, W)
-        app_images_0to1 = app_images * 0.5 + 0.5  # (NV, 3, H, W)
 
         curr_nviews = nviews[torch.randint(0, len(nviews), (1,)).item()]
         views_src = np.sort(np.random.choice(NV, curr_nviews, replace=False))
@@ -510,8 +508,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         )
 
         gt = images_0to1[view_dest].permute(1, 2, 0).cpu().numpy().reshape(H, W, 3)
-        Wa = app_images.shape[-1]
-        app_gt = app_images_0to1[batch_idx].permute(1, 2, 0).cpu().numpy().reshape(H, Wa, 3)
         with torch.no_grad():
             test_rays = cam_rays[view_dest]  # (H, W, 8)
             test_images = images[views_src]  # (NS, 3, H, W)
@@ -521,7 +517,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 focal.to(device=device),
                 c=c.to(device=device) if c is not None else None,
             )
-            net.app_encoder.encode(app_images)
+            if not self.app_enc_off:
+                net.app_encoder.encode(app_images)
             test_rays = test_rays.reshape(1, H * W, -1)
             render_dict = DotMap(render_par(test_rays, want_weights=True))
             coarse = render_dict.coarse
@@ -552,8 +549,15 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             depth_coarse_cmap,
             rgb_coarse_np,
             alpha_coarse_cmap,
-            app_gt
         ]
+
+        if app_data is not None:
+            app_images = app_data["images"].to(device=device)  # (B, 3, H, W)
+            app_images_0to1 = app_images * 0.5 + 0.5  # (NV, 3, H, W)
+            Wa = app_images.shape[-1]
+            app_gt = app_images_0to1[batch_idx].permute(1, 2, 0).cpu().numpy().reshape(H, Wa, 3)
+
+            vis_list.append(app_gt)
 
         vis_coarse = np.hstack(vis_list)
         vis = vis_coarse
@@ -603,8 +607,9 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                     yield x
 
         test_data_iter = data_loop(self.test_data_loader)
-        train_app_data_iter = data_loop(self.train_app_data_loader)
-        test_app_data_iter = data_loop(self.test_app_data_loader)
+        if not self.app_enc_off:
+            train_app_data_iter = data_loop(self.train_app_data_loader)
+            test_app_data_iter = data_loop(self.test_app_data_loader)
 
         step_id = self.start_iter_id
 
@@ -617,7 +622,11 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             batch = 0
             for _ in range(self.num_epoch_repeats):
                 for data in self.train_data_loader:
-                    app_data = next(train_app_data_iter)
+                    if self.app_enc_off:
+                        app_data = None
+                    else:
+                        app_data = next(train_app_data_iter)
+                    
                     losses = self.train_step(data, app_data, global_step=step_id)
                     loss_str = fmt_loss_str(losses)
                     if batch % self.print_interval == 0:
@@ -633,7 +642,10 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
                     if batch % self.eval_interval == 0:
                         test_data = next(test_data_iter)
-                        test_app_data = next(test_app_data_iter)
+                        if self.app_enc_off:
+                            test_app_data = None
+                        else:
+                            test_app_data = next(test_app_data_iter)
                         self.net.eval()
                         with torch.no_grad():
                             test_losses = self.eval_step(test_data, test_app_data, global_step=step_id)
@@ -665,10 +677,16 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                         print("generating visualization")
                         if self.fixed_test:
                             test_data = next(iter(self.test_data_loader))
-                            test_app_data = next(iter(self.test_app_data_loader))
+                            if self.app_enc_off:
+                                test_app_data = None
+                            else:
+                                test_app_data = next(iter(self.test_app_data_loader))
                         else:
                             test_data = next(test_data_iter)
-                            test_app_data = next(test_app_data_iter)
+                            if self.app_enc_off:
+                                test_app_data = None
+                            else:
+                                test_app_data = next(test_app_data_iter)
                         
                         # Render out the scene normally using an input view as our encoding source
                         src_images = test_data["images"]
