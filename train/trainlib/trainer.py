@@ -83,7 +83,7 @@ class Trainer:
                     )
                 except:
                     warnings.warn(
-                        "Failed to load optimizer state at", self.optim_state_path
+                        "Failed to load optimizer state at " + self.optim_state_path
                     )
             if self.lr_scheduler is not None and os.path.exists(
                 self.lrsched_state_path
