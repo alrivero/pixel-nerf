@@ -479,6 +479,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             print(idx)
             batch_idx = idx
         images = data["images"][batch_idx].to(device=device)  # (NV, 3, H, W)
+        if app_data is not None:
+            app_images = app_data["images"].to(device=device)  # (B, 3, H, W)
         poses = data["poses"][batch_idx].to(device=device)  # (NV, 4, 4)
         focal = data["focal"][batch_idx : batch_idx + 1]  # (1)
         c = data.get("c")
@@ -552,7 +554,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         ]
 
         if app_data is not None:
-            app_images = app_data["images"].to(device=device)  # (B, 3, H, W)
             app_images_0to1 = app_images * 0.5 + 0.5  # (NV, 3, H, W)
             Wa = app_images.shape[-1]
             app_gt = app_images_0to1[batch_idx].permute(1, 2, 0).cpu().numpy().reshape(H, Wa, 3)
