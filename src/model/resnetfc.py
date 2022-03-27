@@ -226,7 +226,7 @@ class ResnetFC_App(ResnetFC):
         self.stop_f1_grad = stop_f1_grad
 
         self.app_enc_off = app_enc_off
-        if self.app_enc_off:
+        if not self.app_enc_off:
             size_in = self.blocks[self.combine_layer - 1].size_out + app_in
             size_out = self.blocks[self.combine_layer].size_out
             self.app_block = ResnetBlockFC(size_in, size_out, size_out, beta)
