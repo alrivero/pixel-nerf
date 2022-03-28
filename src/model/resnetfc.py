@@ -279,6 +279,7 @@ class ResnetFC_App(ResnetFC):
                     if not self.app_enc_off:
                         B, D = app_enc.shape
                         _, C, _ = x.shape
+
                         x = torch.cat((app_enc.expand(B, C, D), x), dim=-1)
                         x = self.app_block(x)
 

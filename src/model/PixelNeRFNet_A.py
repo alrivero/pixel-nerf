@@ -255,7 +255,7 @@ class PixelNeRFNet_A(torch.nn.Module):
             # Added appearance encoder as input to MLP
             app_enc = None
             if not self.app_enc_off:
-                app_enc = self.app_encoder.app_encoding
+                app_enc = self.app_encoder.app_encoding.to(mlp_input.get_device())
                 if self.stop_app_encoder_grad:
                     app_enc = app_enc.detach()
 
