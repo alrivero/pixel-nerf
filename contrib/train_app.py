@@ -100,6 +100,13 @@ def extra_args(parser):
         "--refencdir", "-DRE", type=str, default=None, help="Reference encoder directory (used for loss)"
     )
     parser.add_argument(
+        "--ray_type",
+        "-RT",
+        type=str,
+        default=None,
+        help="Which kind of ray smapling to do, either rand or patch",
+    )
+    parser.add_argument(
         "--app_scale", "-AS", type=float, default=1.0, help="The scale of app scenes (FLESH OUT IDK)"
     )
     return parser
@@ -191,7 +198,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         self.use_bbox = args.no_bbox_step > 0
 
         self.app_enc_off = args.app_enc_off
-        self.pass_setup = self.rand_pass_setup if args.app_enc_off else self.patch_pass_setup
+        self.ray_type = args.ray_type
+        self.pass_setup = self.patch_pass_setup if self.ray_type == "patch" else self.rand_pass_setup
 
         # Add loading data for appearance images
         if not self.app_enc_off:
@@ -451,7 +459,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         nerf_loss, reg_render_dict = self.nerf_loss(src_images, all_rays, all_rgb_gt, loss_dict)
         loss = nerf_loss
-        if not self.app_enc_off:
+        if not self.app_enc_off or self.ray_type == "patch":
             app_loss = self.app_loss(app_data, all_rays, all_rgb_gt, src_images, reg_render_dict, loss_dict)
             loss += app_loss
 
@@ -519,7 +527,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 focal.to(device=device),
                 c=c.to(device=device) if c is not None else None,
             )
-            if not self.app_enc_off:
+            if app_data is not None:
                 net.app_encoder.encode(app_images)
             test_rays = test_rays.reshape(1, H * W, -1)
             render_dict = DotMap(render_par(test_rays, want_weights=True))
