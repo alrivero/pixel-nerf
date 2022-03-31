@@ -381,26 +381,19 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         return src_images, all_rays, all_rgb_gt
 
-    def batch_pass(self, app_imgs, all_rays):
+    def reg_pass(self, all_rays):
+        return DotMap(render_par(all_rays, want_weights=True, app_pass=False))
+
+    def app_pass(self, app_imgs, all_rays):
         # Appearance encoder encoding
         net.app_encoder.encode(app_imgs)
-        render_dict = DotMap(render_par(all_rays, want_weights=True,))
+        render_dict = DotMap(render_par(all_rays, want_weights=True, app_pass=True))
 
         return render_dict
 
     def nerf_loss(self, src_images, all_rays, all_rgb_gt, loss_dict):
         # Render out the scene normally using an input view as our encoding source
-        if self.app_enc_off:
-            reg_render_dict = DotMap(render_par(all_rays, want_weights=True,))
-        else:
-            rand_inview_ind = randint(0, len(src_images[0]) - 1)
-            inview_app_imgs = src_images[0][rand_inview_ind].unsqueeze(0)
-            for i in range(1, args.batch_size):
-                rand_inview_ind = randint(0, len(src_images[i]) - 1)
-                new_app_tensor = src_images[i][rand_inview_ind].unsqueeze(0)
-                inview_app_imgs = torch.cat([inview_app_imgs, new_app_tensor], 0)
-
-            reg_render_dict = self.batch_pass(inview_app_imgs, all_rays)
+        reg_render_dict = self.reg_pass(all_rays)
 
         # Compute our standard PixelNeRF loss
         coarse_reg = reg_render_dict.coarse
@@ -419,7 +412,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
     def app_loss(self, app_data, all_rays, all_rgb_gt, src_images, reg_render_dict, loss_dict):
         # Now, render out the scene using the appearance images as our encoding source
         app_imgs = app_data["images"].to(device=device)
-        app_render_dict = self.batch_pass(app_imgs, all_rays)
+        app_render_dict = self.app_pass(app_imgs, all_rays)
 
         # Compute SSH reference encoder loss for appearance pass and density (depth) regularization
         coarse_reg = reg_render_dict.coarse
@@ -704,36 +697,16 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                             else:
                                 test_app_data = next(test_app_data_iter)
                         
-                        # Render out the scene normally using an input view as our encoding source if necessary
-                        if self.app_enc_off:
-                            testview_app_data = None
-                        else:
-                            src_images = test_data["images"]
-                            rand_inview_ind = randint(0, len(src_images[0]) - 1)
-                            inview_app_imgs = src_images[0][rand_inview_ind].unsqueeze(0)
-                            for i in range(1, args.batch_size):
-                                rand_inview_ind = randint(0, len(src_images[i]) - 1)
-                                new_app_tensor = src_images[i][rand_inview_ind].unsqueeze(0)
-                                inview_app_imgs = torch.cat([inview_app_imgs, new_app_tensor], 0)
-                            testview_app_data = { "images": inview_app_imgs }
-
+                        # Render out the scene
                         self.net.eval()
                         with torch.no_grad():
                             vis, vis_vals = self.vis_step(
-                                test_data, testview_app_data, global_step=step_id
+                                test_data, test_app_data, global_step=step_id
                             )
-                            if not self.app_enc_off:
-                                vis_app, vis_vals_app = self.vis_step(
-                                    test_data, test_app_data, global_step=step_id
-                                )
                         if vis_vals is not None:
                             self.writer.add_scalars(
                                 "vis", vis_vals, global_step=step_id
                             )
-                            if not self.app_enc_off:
-                                self.writer.add_scalars(
-                                    "vis_app", vis_vals_app, global_step=step_id
-                                )
                         self.net.train()
                         if vis is not None:
                             import imageio
@@ -745,24 +718,12 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                                     "{:04}_{:04}_vis.png".format(epoch, batch),
                                 ),
                                 vis_u8,
-                            )
-                        if not self.app_enc_off:
-                            if vis_app is not None:
-                                import imageio
-
-                                vis_u8_app = (vis_app * 255).astype(np.uint8)
-                                imageio.imwrite(
-                                    os.path.join(
-                                        self.visual_path,
-                                        "{:04}_{:04}_vis_app.png".format(epoch, batch),
-                                    ),
-                                    vis_u8_app,
-                                )
+                        )
                     if (
                         batch == self.num_total_batches - 1
                         or batch % self.accu_grad == self.accu_grad - 1
                     ):
-                        torch.nn.utils.clip_grad_norm_(net.parameters(), 0.5)
+                        # torch.nn.utils.clip_grad_norm_(net.parameters(), 0.5)
                         self.optim.step()
                         self.optim.zero_grad()
 

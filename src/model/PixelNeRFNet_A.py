@@ -161,7 +161,7 @@ class PixelNeRFNet_A(torch.nn.Module):
             self.global_encoder(images)
 
     
-    def forward(self, xyz, coarse=True, viewdirs=None, far=False):
+    def forward(self, xyz, coarse=True, viewdirs=None, app_pass=True, far=False):
         """
         Predict (r, g, b, sigma) at world space points xyz.
         Please call encode first!
@@ -254,7 +254,7 @@ class PixelNeRFNet_A(torch.nn.Module):
             
             # Added appearance encoder as input to MLP
             app_enc = None
-            if not self.app_enc_off:
+            if not self.app_enc_off and app_pass:
                 app_enc = self.app_encoder.app_encoding.to(mlp_input.get_device())
                 if self.stop_app_encoder_grad:
                     app_enc = app_enc.detach()
@@ -327,6 +327,12 @@ class PixelNeRFNet_A(torch.nn.Module):
                     + "If training, unless you are startin a new experiment, please remember to pass --resume."
                 ).format(model_path)
             )
+
+        # Make a deep copy of F2 for evaluation
+        for i in range(self.mlp_coarse.combine_layer, self.mlp_coarse.n_blocks):
+            self.mlp_coarse.app_blocks.append(self.mlp_coarse.blocks[i].deepcopy())
+        for i in range(self.mlp_fine.combine_layer, self.mlp_fine.n_blocks):
+            self.mlp_fine.app_blocks.append(self.mlp_fine.blocks[i].deepcopy())
         
         if self.app_enc_off:
             return

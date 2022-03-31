@@ -160,7 +160,7 @@ class NeRFRenderer(torch.nn.Module):
         z_samp = torch.max(torch.min(z_samp, rays[:, -1:]), rays[:, -2:-1])
         return z_samp
 
-    def composite(self, model, rays, z_samp, coarse=True, sb=0):
+    def composite(self, model, rays, z_samp, coarse=True, app_pass=True, sb=0):
         """
         Render RGB and depth for each ray using NeRF alpha-compositing formula,
         given sampled positions along each ray (see sample_*)
@@ -210,10 +210,10 @@ class NeRFRenderer(torch.nn.Module):
                     viewdirs, eval_batch_size, dim=eval_batch_dim
                 )
                 for pnts, dirs in zip(split_points, split_viewdirs):
-                    val_all.append(model(pnts, coarse=coarse, viewdirs=dirs))
+                    val_all.append(model(pnts, coarse=coarse, viewdirs=dirs, app_pass=app_pass))
             else:
                 for pnts in split_points:
-                    val_all.append(model(pnts, coarse=coarse))
+                    val_all.append(model(pnts, coarse=coarse, app_pass=app_pass))
             points = None
             viewdirs = None
             # (B*K, 4) OR (SB, B'*K, 4)
@@ -249,7 +249,7 @@ class NeRFRenderer(torch.nn.Module):
             )
 
     def forward(
-        self, model, rays, want_weights=False,
+        self, model, rays, app_pass=True, want_weights=False,
     ):
         """
         :model nerf model, should return (SB, B, (r, g, b, sigma))
@@ -272,7 +272,7 @@ class NeRFRenderer(torch.nn.Module):
 
             z_coarse = self.sample_coarse(rays)  # (B, Kc)
             coarse_composite = self.composite(
-                model, rays, z_coarse, coarse=True, sb=superbatch_size,
+                model, rays, z_coarse, coarse=True, app_pass=app_pass sb=superbatch_size,
             )
 
             outputs = DotMap(
@@ -294,7 +294,7 @@ class NeRFRenderer(torch.nn.Module):
                 z_combine = torch.cat(all_samps, dim=-1)  # (B, Kc + Kf)
                 z_combine_sorted, argsort = torch.sort(z_combine, dim=-1)
                 fine_composite = self.composite(
-                    model, rays, z_combine_sorted, coarse=False, sb=superbatch_size,
+                    model, rays, z_combine_sorted, coarse=False, app_pass=app_pass, sb=superbatch_size,
                 )
                 outputs.fine = self._format_outputs(
                     fine_composite, superbatch_size, want_weights=want_weights,

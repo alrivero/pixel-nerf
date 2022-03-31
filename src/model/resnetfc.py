@@ -229,7 +229,9 @@ class ResnetFC_App(ResnetFC):
         if not self.app_enc_off:
             size_in = self.blocks[self.combine_layer - 1].size_out + app_in
             size_out = self.blocks[self.combine_layer].size_out
-            self.app_block = ResnetBlockFC(size_in, size_out, size_out, beta)
+            self.app_blocks = nn.ModuleList([ResnetBlockFC(size_in, size_out, size_out, beta)])
+        
+        self.app_blocks = None
 
     
     def forward(self, zx, app_enc, combine_inner_dims=(1,), combine_index=None, dim_size=None):
@@ -251,38 +253,9 @@ class ResnetFC_App(ResnetFC):
             else:
                 x = torch.zeros(self.d_hidden, device=zx.device)
 
-            for blkid in range(self.n_blocks):
-                if blkid == self.combine_layer:
-                    # The following implements camera frustum culling, requires torch_scatter
-                    #  if combine_index is not None:
-                    #      combine_type = (
-                    #          "mean"
-                    #          if self.combine_type == "average"
-                    #          else self.combine_type
-                    #      )
-                    #      if dim_size is not None:
-                    #          assert isinstance(dim_size, int)
-                    #      x = torch_scatter.scatter(
-                    #          x,
-                    #          combine_index,
-                    #          dim=0,
-                    #          dim_size=dim_size,
-                    #          reduce=combine_type,
-                    #      )
-                    #  else:
-                    x = util.combine_interleaved(
-                        x, combine_inner_dims, self.combine_type
-                    )
-                    if self.stop_f1_grad:
-                        x = x.detach()
-
-                    if not self.app_enc_off:
-                        B, D = app_enc.shape
-                        _, C, _ = x.shape
-
-                        x = torch.cat((app_enc.expand(B, C, D), x), dim=-1)
-                        x = self.app_block(x)
-
+            # Run through the first F1 layers
+            blocks = self.blocks
+            for blkid in range(self.combine_layer):
                 if self.d_latent > 0 and blkid < self.combine_layer:
                     tz = self.lin_z[blkid](z)
                     if self.use_spade:
@@ -291,7 +264,41 @@ class ResnetFC_App(ResnetFC):
                     else:
                         x = x + tz
 
-                x = self.blocks[blkid](x)
+                x = blocks[blkid](x)
+            
+            # Combine the output given by the first F1 layers
+            x = util.combine_interleaved(
+                x, combine_inner_dims, self.combine_type
+            )
+            if self.stop_f1_grad:
+                x = x.detach()
+            
+            # Choose whether to continue using the rest of the regular pixelNeRF F2
+            # or use the F2 for PixelNeRF-A
+            cont_ind = self.combine_layer
+            end_ind = self.n_blocks
+            if app_enc is None:
+                cont_ind = self.combine_layer
+                end_ind = self.n_blocks
+            else:
+                blocks = self.app_blocks
+                cont_ind = 0
+                end_ind = len(self.app_blocks)
+            
+            
+            # Continue rendering our pass through the network
+            for blkid in range(cont_ind, end_ind):
+                if self.d_latent > 0 and blkid < self.combine_layer:
+                    tz = self.lin_z[blkid](z)
+                    if self.use_spade:
+                        sz = self.scale_z[blkid](z)
+                        x = sz * x + tz
+                    else:
+                        x = x + tz
+
+                x = blocks[blkid](x)
+            
+            # Final linear layer
             out = self.lin_out(self.activation(x))
             return out
 
