@@ -327,15 +327,15 @@ class PixelNeRFNet_A(torch.nn.Module):
                     + "If training, unless you are startin a new experiment, please remember to pass --resume."
                 ).format(model_path)
             )
-
-        # Make a deep copy of F2 for evaluation
-        for i in range(self.mlp_coarse.combine_layer, self.mlp_coarse.n_blocks):
-            self.mlp_coarse.app_blocks.append(self.mlp_coarse.blocks[i].deepcopy())
-        for i in range(self.mlp_fine.combine_layer, self.mlp_fine.n_blocks):
-            self.mlp_fine.app_blocks.append(self.mlp_fine.blocks[i].deepcopy())
         
         if self.app_enc_off:
             return
+
+        # Make a copy of F2 for ground truth evaluation
+        for i in range(self.mlp_fine.combine_layer, self.mlp_fine.n_blocks):
+            app_ind = i - self.mlp_fine.combine_layer + 1
+            self.mlp_coarse.app_blocks[app_ind].load_state_dict(self.mlp_coarse.blocks[i].state_dict())
+            self.mlp_fine.app_blocks[app_ind].load_state_dict(self.mlp_fine.blocks[i].state_dict())
         
         # Only load weights for our appearance encoder if we want to
         if args.load_app_encoder:

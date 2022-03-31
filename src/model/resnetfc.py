@@ -229,9 +229,10 @@ class ResnetFC_App(ResnetFC):
         if not self.app_enc_off:
             size_in = self.blocks[self.combine_layer - 1].size_out + app_in
             size_out = self.blocks[self.combine_layer].size_out
-            self.app_blocks = nn.ModuleList([ResnetBlockFC(size_in, size_out, size_out, beta)])
-        
-        self.app_blocks = None
+
+            app_blocks = [ResnetBlockFC(size_in, size_out, size_out, beta)]
+            app_blocks += [ResnetBlockFC(d_hidden, beta=beta) for i in range(self.combine_layer, self.n_blocks)]
+            self.app_blocks = nn.ModuleList(app_blocks)
 
     
     def forward(self, zx, app_enc, combine_inner_dims=(1,), combine_index=None, dim_size=None):
