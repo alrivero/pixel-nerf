@@ -19,7 +19,7 @@ class _RenderWrapper(torch.nn.Module):
         self.renderer = renderer
         self.simple_output = simple_output
 
-    def forward(self, rays, want_weights=False):
+    def forward(self, rays, want_weights=False, app_pass=True):
         if rays.shape[0] == 0:
             return (
                 torch.zeros(0, 3, device=rays.device),
@@ -27,7 +27,7 @@ class _RenderWrapper(torch.nn.Module):
             )
 
         outputs = self.renderer(
-            self.net, rays, want_weights=want_weights and not self.simple_output
+            self.net, rays, want_weights=want_weights and not self.simple_output, app_pass=app_pass
         )
         if self.simple_output:
             if self.renderer.using_fine:
