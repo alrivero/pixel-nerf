@@ -272,7 +272,7 @@ class NeRFRenderer(torch.nn.Module):
 
             z_coarse = self.sample_coarse(rays)  # (B, Kc)
             coarse_composite = self.composite(
-                model, rays, z_coarse, coarse=True, app_pass=app_pass sb=superbatch_size,
+                model, rays, z_coarse, coarse=True, app_pass=app_pass, sb=superbatch_size,
             )
 
             outputs = DotMap(
