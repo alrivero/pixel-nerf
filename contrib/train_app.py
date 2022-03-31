@@ -762,6 +762,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                         batch == self.num_total_batches - 1
                         or batch % self.accu_grad == self.accu_grad - 1
                     ):
+                        torch.nn.utils.clip_grad_norm_(net.parameters(), 0.5)
                         self.optim.step()
                         self.optim.zero_grad()
 
