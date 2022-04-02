@@ -384,7 +384,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         
         return rgb_loss
 
-    def app_loss(self, app_imgs, src_images, app_render_dict, reg_render_dict, loss_dict):
+    def app_loss(self, src_images, app_render_dict, reg_render_dict, loss_dict):
 
         # Compute SSH reference encoder loss for appearance pass and density (depth) regularization
         coarse_reg = reg_render_dict.coarse
@@ -425,14 +425,13 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         reg_render_dict = self.reg_pass(all_rays)
 
         # Render out our scene using appearance encoding and trainable F2
-        app_imgs = app_data["images"].to(device=device)
-        app_render_dict = self.app_pass(app_imgs, all_rays)
+        app_render_dict = self.app_pass(app_data, all_rays)
 
         loss_dict = {}
         
         # Compute our standard NeRF losses and losses associated with appearance encoder
         nerf_loss = self.nerf_loss(app_render_dict, all_rgb_gt, loss_dict)
-        app_loss = self.app_loss(app_imgs, src_images, app_render_dict, reg_render_dict, loss_dict)
+        app_loss = self.app_loss(src_images, app_render_dict, reg_render_dict, loss_dict)
 
         # Compute our standard NeRF loss
         loss = nerf_loss + app_loss
