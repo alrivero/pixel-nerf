@@ -120,7 +120,7 @@ class ReferenceColorLoss(torch.nn.Module):
 
         out_views = outputs_encodings.shape[0]
         tar_views = self.target_app_encodings.shape[0]
-        targets_encodings = repeat_interleave(targets_encodings, out_views // tar_views)
+        targets_encodings = repeat_interleave(self.target_app_encodings, out_views // tar_views)
 
         return self.ref_loss(outputs_encodings, targets_encodings)
 
