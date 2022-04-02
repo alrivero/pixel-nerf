@@ -4,7 +4,7 @@ from .MultiObjectDataset import MultiObjectDataset
 from .DVRDataset import DVRDataset
 from .SRNDataset import SRNDataset
 from .data_util import ColorJitterDataset
-from contrib.data.AppearanceDataset import AppearanceDataset
+from .AppearanceDataset import AppearanceDataset
 
 
 def get_split_dataset(dataset_type, datadir, want_split="all", training=True, **kwargs):
