@@ -210,8 +210,7 @@ class ResnetFC_App(ResnetFC):
         combine_layer=1000,
         combine_type="average",
         use_spade=False,
-        stop_f1_grad=False,
-        app_enc_off=False
+        stop_f1_grad=False
     ):
         """
         :param d_in input size
