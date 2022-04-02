@@ -120,7 +120,7 @@ if (app_size_h is not None and app_size_w is not None):
     app_size = (app_size_h, app_size_w)
 
 dset, val_dset, _ = get_split_dataset(args.dataset_format, args.datadir)
-dset_app = AppearanceDataset(args.appdir, "train", image_size=app_size)
+dset_app = AppearanceDataset(args.appdir, "train", image_size=app_size, img_ind=args.app_ind)
 print(
     "dset z_near {}, z_far {}, lindisp {}".format(dset.z_near, dset.z_far, dset.lindisp)
 )

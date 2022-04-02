@@ -23,6 +23,7 @@ class AppearanceDataset(torch.utils.data.Dataset):
         max_imgs=100000,
         z_near=1.2,
         z_far=4.0,
+        img_ind=None
     ):
         super().__init__()
         self.base_path = path
@@ -69,6 +70,7 @@ class AppearanceDataset(torch.utils.data.Dataset):
         self.image_size = image_size
         self.max_imgs = max_imgs
         self.lindisp = False
+        self.img_ind = img_ind
     
     def __len__(self):
         return len(self.all_objs)
@@ -84,7 +86,7 @@ class AppearanceDataset(torch.utils.data.Dataset):
         rgb_paths = sorted(rgb_paths)
         
         # Get a random image from this directory
-        img_ind = random.randint(0, len(rgb_paths) - 1)
+        img_ind = self.img_ind if self.img_ind is not None else random.randint(0, len(rgb_paths) - 1)
         img = imageio.imread(rgb_paths[img_ind])[..., :3]
         img_tensor = self.image_to_tensor(img)
 
