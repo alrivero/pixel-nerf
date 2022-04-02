@@ -250,9 +250,10 @@ class PixelNeRFNet_A(torch.nn.Module):
             
             # Added appearance encoder as input to MLP
             app_enc = None
-            app_enc = self.app_encoder.app_encoding.to(mlp_input.get_device())
-            if self.stop_app_encoder_grad:
-                app_enc = app_enc.detach()
+            if app_pass:
+                app_enc = self.app_encoder.app_encoding.to(mlp_input.get_device())
+                if self.stop_app_encoder_grad:
+                    app_enc = app_enc.detach()
 
             # Camera frustum culling stuff, currently disabled
             combine_index = None
