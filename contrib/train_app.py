@@ -460,7 +460,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             print(idx)
             batch_idx = idx
         images = data["images"][batch_idx].to(device=device)  # (NV, 3, H, W)
-        app_images = self.appearance_img.unsqueeze(0)
+        app_images = self.appearance_img
         poses = data["poses"][batch_idx].to(device=device)  # (NV, 4, 4)
         focal = data["focal"][batch_idx : batch_idx + 1]  # (1)
         c = data.get("c")
@@ -558,11 +558,9 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 alpha_fine_cmap,
             ]
 
-            app_images = self.appearance_img.to(device=device)  # (B, 3, H, W)
             app_images_0to1 = app_images * 0.5 + 0.5  # (NV, 3, H, W)
             Wa = app_images.shape[-1]
             app_gt = app_images_0to1[batch_idx].permute(1, 2, 0).cpu().numpy().reshape(H, Wa, 3)
-
             vis_list.append(app_gt)
 
             vis_fine = np.hstack(vis_list)
