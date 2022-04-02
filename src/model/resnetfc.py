@@ -292,14 +292,6 @@ class ResnetFC_App(ResnetFC):
             
             # Continue rendering our pass through the network
             for blkid in range(cont_ind, end_ind):
-                if self.d_latent > 0 and blkid < self.combine_layer:
-                    tz = self.lin_z[blkid](z)
-                    if self.use_spade:
-                        sz = self.scale_z[blkid](z)
-                        x = sz * x + tz
-                    else:
-                        x = x + tz
-
                 x = blocks[blkid](x)
             
             # Final linear layer
