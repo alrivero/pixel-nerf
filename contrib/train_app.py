@@ -194,7 +194,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         self.pass_setup = self.patch_pass_setup if self.ray_type == "patch" else self.rand_pass_setup
 
         self.appearance_img = dset_app[args.app_ind]["images"].unsqueeze(0)
-        self.ref_app_crit.encode_targets(self.appearance_img)
+        self.ref_app_crit.encode_targets(self.appearance_img.to(device=device))
 
     def post_batch(self, epoch, batch):
         renderer.sched_step(args.batch_size)
