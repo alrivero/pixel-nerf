@@ -98,10 +98,8 @@ class PixelNeRFNet_A(torch.nn.Module):
         self.num_views_per_obj = 1
 
         # Appearance encoder additions
-        self.app_enc_off = app_enc_off
-        if not self.app_enc_off:
-            self.stop_app_encoder_grad = stop_app_encoder_grad
-            self.app_encoder = AppearanceEncoder(conf["app_encoder"])
+        self.stop_app_encoder_grad = stop_app_encoder_grad
+        self.app_encoder = AppearanceEncoder(conf["app_encoder"])
 
     def encode(self, images, poses, focal, z_bounds=None, c=None):
         """
@@ -254,10 +252,9 @@ class PixelNeRFNet_A(torch.nn.Module):
             
             # Added appearance encoder as input to MLP
             app_enc = None
-            if not self.app_enc_off and app_pass:
-                app_enc = self.app_encoder.app_encoding.to(mlp_input.get_device())
-                if self.stop_app_encoder_grad:
-                    app_enc = app_enc.detach()
+            app_enc = self.app_encoder.app_encoding.to(mlp_input.get_device())
+            if self.stop_app_encoder_grad:
+                app_enc = app_enc.detach()
 
             # Camera frustum culling stuff, currently disabled
             combine_index = None
@@ -327,15 +324,13 @@ class PixelNeRFNet_A(torch.nn.Module):
                     + "If training, unless you are startin a new experiment, please remember to pass --resume."
                 ).format(model_path)
             )
-        
-        if self.app_enc_off:
-            return
 
         # Make a copy of F2 for ground truth evaluation
-        for i in range(self.mlp_fine.combine_layer, self.mlp_fine.n_blocks):
-            app_ind = i - self.mlp_fine.combine_layer + 1
-            self.mlp_coarse.app_blocks[app_ind].load_state_dict(self.mlp_coarse.blocks[i].state_dict())
-            self.mlp_fine.app_blocks[app_ind].load_state_dict(self.mlp_fine.blocks[i].state_dict())
+        if not args.resume:
+            for i in range(self.mlp_fine.combine_layer, self.mlp_fine.n_blocks):
+                app_ind = i - self.mlp_fine.combine_layer + 1
+                self.mlp_coarse.app_blocks[app_ind].load_state_dict(self.mlp_coarse.blocks[i].state_dict())
+                self.mlp_fine.app_blocks[app_ind].load_state_dict(self.mlp_fine.blocks[i].state_dict())
         
         # Only load weights for our appearance encoder if we want to
         if args.load_app_encoder:

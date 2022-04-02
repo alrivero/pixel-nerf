@@ -225,14 +225,13 @@ class ResnetFC_App(ResnetFC):
 
         self.stop_f1_grad = stop_f1_grad
 
-        self.app_enc_off = app_enc_off
-        if not self.app_enc_off:
-            size_in = self.blocks[self.combine_layer - 1].size_out + app_in
-            size_out = self.blocks[self.combine_layer].size_out
+        size_in = self.blocks[self.combine_layer - 1].size_out + app_in
+        size_out = self.blocks[self.combine_layer].size_out
 
-            app_blocks = [ResnetBlockFC(size_in, size_out, size_out, beta)]
-            app_blocks += [ResnetBlockFC(d_hidden, beta=beta) for i in range(self.combine_layer, self.n_blocks)]
-            self.app_blocks = nn.ModuleList(app_blocks)
+        self.app_trans_block = ResnetBlockFC(size_in, size_out, size_out, beta)
+        self.app_blocks = nn.ModuleList(
+            [ResnetBlockFC(d_hidden, beta=beta) for _ in range(self.combine_layer, self.n_blocks)]
+        )
 
     
     def forward(self, zx, app_enc, combine_inner_dims=(1,), combine_index=None, dim_size=None):
@@ -285,6 +284,8 @@ class ResnetFC_App(ResnetFC):
                 blocks = self.app_blocks
                 cont_ind = 0
                 end_ind = len(self.app_blocks)
+
+                x = self.app_trans_block(x) # Use transition block to move to lower dim used by blocks
             
             
             # Continue rendering our pass through the network
