@@ -29,7 +29,7 @@ import tqdm
 from dotmap import DotMap
 from random import randint
 from torchvision.transforms.functional_tensor import crop
-from data.AppearanceDataset import AppearanceDataset
+from .data.AppearanceDataset import AppearanceDataset
 
 
 def extra_args(parser):
