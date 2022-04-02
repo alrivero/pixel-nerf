@@ -326,7 +326,7 @@ class PixelNeRFNet_A(torch.nn.Module):
         # Make a copy of F2 for ground truth evaluation
         if not args.resume:
             for i in range(self.mlp_fine.combine_layer, self.mlp_fine.n_blocks):
-                app_ind = i - self.mlp_fine.combine_layer + 1
+                app_ind = i - self.mlp_fine.combine_layer
                 self.mlp_coarse.app_blocks[app_ind].load_state_dict(self.mlp_coarse.blocks[i].state_dict())
                 self.mlp_fine.app_blocks[app_ind].load_state_dict(self.mlp_fine.blocks[i].state_dict())
         
