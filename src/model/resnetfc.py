@@ -284,6 +284,9 @@ class ResnetFC_App(ResnetFC):
                 cont_ind = 0
                 end_ind = len(self.app_blocks)
 
+                B, D = app_enc.shape
+                _, C, _ = x.shape
+                x = torch.cat((app_enc.expand(B, C, D), x), dim=-1)
                 x = self.app_trans_block(x) # Use transition block to move to lower dim used by blocks
             
             
