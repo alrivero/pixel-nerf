@@ -402,15 +402,15 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         loss_dict["ad"] = density_app_loss.item()
 
         # We need to reshape our color data into image patches to feed reference encoder
-        _, _, D, H, W = src_images.shape
+        B, _, D, H, W = src_images.shape
         Hs = int(H * args.app_scale)
         Ws = int(W * args.app_scale)
         if using_fine_app:
-            app_rgb = fine_app.rgb.reshape(-1, D, Hs, Ws)
+            app_rgb = fine_app.rgb.reshape(B, D, Hs, Ws)
             app_rgb = F.interpolate(app_rgb, size=(H, W), mode="area")
             ref_app_loss = self.ref_app_crit(app_rgb) * self.lambda_ref
         else:
-            app_rgb = coarse_app.rgb.reshape(-1, D, Hs, Ws)
+            app_rgb = coarse_app.rgb.reshape(B, D, Hs, Ws)
             app_rgb = F.interpolate(app_rgb, size=(H, W), mode="area")
             ref_app_loss = self.ref_app_crit(app_rgb) * self.lambda_ref
         loss_dict["ar"] = ref_app_loss.item()
