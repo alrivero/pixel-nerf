@@ -12,7 +12,7 @@ from torch import nn
 
 class PixelNeRFNet_A(torch.nn.Module):
     # For now, identical to the PixelNeRF
-    def __init__(self, conf, stop_encoder_grad=False, stop_app_encoder_grad=False, stop_f1_grad=False, app_enc_off=False):
+    def __init__(self, conf, stop_encoder_grad=False, stop_app_encoder_grad=False, stop_f1_grad=False):
         """
         :param conf PyHocon config subtree 'model'
         """
@@ -72,7 +72,6 @@ class PixelNeRFNet_A(torch.nn.Module):
             d_in, d_latent, 
             d_out=d_out, 
             stop_f1_grad=stop_f1_grad,
-            app_enc_off=app_enc_off
         )
         self.mlp_fine = make_mlp(
             conf["mlp_fine"], 
@@ -81,7 +80,6 @@ class PixelNeRFNet_A(torch.nn.Module):
             d_out=d_out, 
             allow_empty=True, 
             stop_f1_grad=stop_f1_grad,
-            app_enc_off=app_enc_off
         )
         # Note: this is world -> camera, and bottom row is omitted
         self.register_buffer("poses", torch.empty(1, 3, 4), persistent=False)

@@ -310,7 +310,7 @@ class ResnetFC_App(ResnetFC):
             d_in,
             n_blocks=conf.get_int("n_blocks", 5),
             d_hidden=conf.get_int("d_hidden", 128),
-            app_in=conf.get_int("app_in", 512),
+            app_in=conf.get_int("app_in", 256),
             beta=conf.get_float("beta", 0.0),
             combine_layer=conf.get_int("combine_layer", 1000),
             combine_type=conf.get_string("combine_type", "average"),  # average | max
