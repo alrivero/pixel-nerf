@@ -654,7 +654,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                         self.net.eval()
                         with torch.no_grad():
                             vis, vis_vals = self.vis_step(
-                                test_data, self.appearance_img, global_step=step_id
+                                test_data, global_step=step_id
                             )
                         if vis_vals is not None:
                             self.writer.add_scalars(
