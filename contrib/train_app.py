@@ -192,7 +192,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         self.use_bbox = args.no_bbox_step > 0
 
         self.ray_type = args.ray_type
-        self.pass_setup = self.rand_pass_setup if self.ray_type == "rand" else self.patch_pass_setup
+        # self.pass_setup = self.rand_pass_setup if self.ray_type == "rand" else self.patch_pass_setup
 
         self.appearance_img = dset_app[args.app_ind]["images"].unsqueeze(0).to(device=device)
         self.ref_app_crit.encode_targets(self.appearance_img)
@@ -203,7 +203,43 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
     def extra_save_state(self):
         torch.save(renderer.state_dict(), self.renderer_state_path)
 
-    def rand_pass_setup(self, data, is_train=True, global_step=0):
+    def choose_views(self, data):
+        all_images = data["images"].to(device=device)  # (SB, NV, 3, H, W)
+        all_poses = data["poses"].to(device=device)  # (SB, NV, 4, 4)
+        SB, NV, _, _, _ = all_images.shape
+        
+        curr_nviews = nviews[torch.randint(0, len(nviews), ()).item()]
+        if curr_nviews == 1:
+            image_ord = torch.randint(0, NV, (SB, 1))
+        else:
+            image_ord = torch.empty((SB, curr_nviews), dtype=torch.long)
+        
+        for obj_idx in range(SB):
+            if curr_nviews > 1:
+                # Somewhat inefficient, don't know better way
+                image_ord[obj_idx] = torch.from_numpy(
+                    np.random.choice(NV, curr_nviews, replace=False)
+                )
+        
+        src_images = util.batched_index_select_nd(
+            all_images, image_ord
+        )  # (SB, NS, 3, H, W)
+        src_poses = util.batched_index_select_nd(all_poses, image_ord)  # (SB, NS, 4, 4)
+
+        return src_images, src_poses
+    
+    def encode_chosen_views(self, data, src_images, src_poses):
+        all_focals = data["focal"]  # (SB)
+        all_c = data.get("c")  # (SB)
+
+        net.encode(
+            src_images,
+            src_poses,
+            all_focals.to(device=device),
+            c=all_c.to(device=device) if all_c is not None else None,
+        )
+
+    def rand_rays(self, data, is_train=True, global_step=0):
         if "images" not in data:
             return {}
         all_images = data["images"].to(device=device)  # (SB, NV, 3, H, W)
@@ -212,7 +248,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         all_poses = data["poses"].to(device=device)  # (SB, NV, 4, 4)
         all_bboxes = data.get("bbox")  # (SB, NV, 4)  cmin rmin cmax rmax
         all_focals = data["focal"]  # (SB)
-        all_c = data.get("c")  # (SB)
 
         if self.use_bbox and global_step >= args.no_bbox_step:
             self.use_bbox = False
@@ -224,11 +259,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         all_rgb_gt = []
         all_rays = []
 
-        curr_nviews = nviews[torch.randint(0, len(nviews), ()).item()]
-        if curr_nviews == 1:
-            image_ord = torch.randint(0, NV, (SB, 1))
-        else:
-            image_ord = torch.empty((SB, curr_nviews), dtype=torch.long)
         for obj_idx in range(SB):
             if all_bboxes is not None:
                 bboxes = all_bboxes[obj_idx]
@@ -238,11 +268,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             c = None
             if "c" in data:
                 c = data["c"][obj_idx]
-            if curr_nviews > 1:
-                # Somewhat inefficient, don't know better way
-                image_ord[obj_idx] = torch.from_numpy(
-                    np.random.choice(NV, curr_nviews, replace=False)
-                )
             images_0to1 = images * 0.5 + 0.5
 
             cam_rays = util.gen_rays(
@@ -270,24 +295,11 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         all_rgb_gt = torch.stack(all_rgb_gt)  # (SB, ray_batch_size, 3)
         all_rays = torch.stack(all_rays)  # (SB, ray_batch_size, 8)
 
-        image_ord = image_ord.to(device)
-        src_images = util.batched_index_select_nd(
-            all_images, image_ord
-        )  # (SB, NS, 3, H, W)
-        src_poses = util.batched_index_select_nd(all_poses, image_ord)  # (SB, NS, 4, 4)
-
         all_bboxes = all_poses = all_images = None
 
-        net.encode(
-            src_images,
-            src_poses,
-            all_focals.to(device=device),
-            c=all_c.to(device=device) if all_c is not None else None,
-        )
+        return all_rays, all_rgb_gt
 
-        return src_images, all_rays, all_rgb_gt
-
-    def patch_pass_setup(self, data, is_train=True, global_step=0):
+    def patch_rays(self, data):
         if "images" not in data:
             return {}
         all_images = data["images"].to(device=device)  # (SB, NV, 3, H, W)
@@ -295,16 +307,10 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         SB, NV, _, H, W = all_images.shape
         all_poses = data["poses"].to(device=device)  # (SB, NV, 4, 4)
         all_focals = data["focal"]  # (SB)
-        all_c = data.get("c")  # (SB)
 
         all_rgb_gt = []
         all_rays = []
 
-        curr_nviews = nviews[torch.randint(0, len(nviews), ()).item()]
-        if curr_nviews == 1:
-            image_ord = torch.randint(0, NV, (SB, 1))
-        else:
-            image_ord = torch.empty((SB, curr_nviews), dtype=torch.long)
         for obj_idx in range(SB):
             images = all_images[obj_idx]  # (NV, 3, H, W)
             poses = all_poses[obj_idx]  # (NV, 4, 4)
@@ -312,11 +318,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             c = None
             if "c" in data:
                 c = data["c"][obj_idx]
-            if curr_nviews > 1:
-                # Somewhat inefficient, don't know better way
-                image_ord[obj_idx] = torch.from_numpy(
-                    np.random.choice(NV, curr_nviews, replace=False)
-                )
             images_0to1 = images * 0.5 + 0.5
 
             cam_rays = util.gen_rays(
@@ -341,24 +342,13 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         all_rgb_gt = torch.stack(all_rgb_gt)  # (SB, ray_batch_size, 3)
         all_rays = torch.stack(all_rays)  # (SB, ray_batch_size, 8)
 
-        image_ord = image_ord.to(device)
-        src_images = util.batched_index_select_nd(
-            all_images, image_ord
-        )  # (SB, NS, 3, H, W)
-        src_poses = util.batched_index_select_nd(all_poses, image_ord)  # (SB, NS, 4, 4)
+        image_ord = torch.randint(0, NV, (SB, 1))
         all_rays = util.batched_index_select_nd(all_rays, image_ord).reshape(SB, -1, 8)
         all_rgb_gt = util.batched_index_select_nd(all_rgb_gt, image_ord).reshape(SB, -1, 3)
 
         all_poses = all_images = None
 
-        net.encode(
-            src_images,
-            src_poses,
-            all_focals.to(device=device),
-            c=all_c.to(device=device) if all_c is not None else None,
-        )
-
-        return src_images, all_rays, all_rgb_gt
+        return all_rays, all_rgb_gt
 
     def reg_pass(self, all_rays):
         return DotMap(render_par(all_rays, want_weights=True, app_pass=False))
@@ -385,9 +375,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         
         return rgb_loss
 
-    def app_loss(self, src_images, app_render_dict, reg_render_dict, loss_dict):
-
-        # Compute SSH reference encoder loss for appearance pass and density (depth) regularization
+    def depth_loss(self, app_render_dict, reg_render_dict, loss_dict):
         coarse_reg = reg_render_dict.coarse
         fine_reg = reg_render_dict.fine
 
@@ -401,42 +389,64 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             density_app_loss_fine = self.density_app_crit(fine_reg.depth.detach(), fine_app.depth) * self.lambda_density_fine
             density_app_loss += density_app_loss_fine
             loss_dict["df"] = density_app_loss_fine.item()
+        
+        return density_app_loss
+
+    def app_loss(self, src_images, app_patch_render_dict, loss_dict):
+        coarse_app_patch = app_patch_render_dict.coarse
+        fine_app_patch = app_patch_render_dict.fine
+        using_fine_app_patch = len(fine_app_patch) > 0
 
         # We need to reshape our color data into image patches to feed reference encoder
-        B, _, D, H, W = src_images.shape
+        _, _, D, H, W = src_images.shape
         Hs = int(H * args.app_scale)
         Ws = int(W * args.app_scale)
-        if using_fine_app:
-            app_rgb = fine_app.rgb.reshape(-1, D, Hs, Ws)
+        if using_fine_app_patch:
+            app_rgb = fine_app_patch.rgb.reshape(-1, D, Hs, Ws)
             app_rgb = F.interpolate(app_rgb, size=(H, W), mode="area")
             ref_app_loss = self.ref_app_crit(app_rgb) * self.lambda_ref
         else:
-            app_rgb = coarse_app.rgb.reshape(-1, D, Hs, Ws)
+            app_rgb = coarse_app_patch.rgb.reshape(-1, D, Hs, Ws)
             app_rgb = F.interpolate(app_rgb, size=(H, W), mode="area")
             ref_app_loss = self.ref_app_crit(app_rgb) * self.lambda_ref
         loss_dict["r"] = ref_app_loss.item()
 
-        return density_app_loss + ref_app_loss
+        return ref_app_loss
 
     def calc_losses(self, data, app_data, is_train=True, global_step=0):
-        # Do some setup to establish rays and view images
-        src_images, all_rays, all_rgb_gt = self.pass_setup(data, is_train, global_step)
+        # Establish the views we'll be using to train
+        src_images, src_poses = self.choose_views(data)
 
-        # Render out the scene normally using pretrained F2
-        reg_render_dict = self.reg_pass(all_rays)
+        # Encode our chosen views
+        self.encode_chosen_views(data, src_images, src_poses)
+
+        # Choose our standard randomly-smapled rays for our regular pass
+        nerf_rays, nerf_rays_gt = self.rand_rays(data, is_train, global_step)
+
+        # Render out our scene with our ground truth model
+        reg_render_dict = self.reg_pass(nerf_rays)
 
         # Render out our scene using appearance encoding and trainable F2
-        app_render_dict = self.app_pass(app_data, all_rays)
+        app_render_dict = self.app_pass(app_data, nerf_rays)
 
         loss_dict = {}
         
         # Compute our standard NeRF losses and losses associated with appearance encoder
-        nerf_loss = self.nerf_loss(app_render_dict, all_rgb_gt, loss_dict)
-        app_loss = self.app_loss(src_images, app_render_dict, reg_render_dict, loss_dict)
+        nerf_loss = self.nerf_loss(app_render_dict, nerf_rays_gt, loss_dict)
+        # Compute our density loss using the depthmap from our ground truth
+        depth_loss = self.depth_loss(app_render_dict, reg_render_dict, loss_dict)
+
+        # Choose rays corresponding to an image patch at our disposal
+        patch_rays, _ = self.patch_rays(data)
+
+        # Render out this patch
+        app_patch_render_dict = self.app_pass(app_data, patch_rays)
+
+        # Compute our appearance loss using our appearance encoder
+        app_loss = self.app_loss(src_images, app_patch_render_dict, loss_dict)
 
         # Compute our standard NeRF loss
-        loss = nerf_loss + app_loss
-
+        loss = nerf_loss + depth_loss + app_loss
         if is_train:
             loss.backward()
         loss_dict["t"] = loss.item()
