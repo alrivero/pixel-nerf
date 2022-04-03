@@ -170,10 +170,11 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             self.rgb_fine_crit = loss.get_rgb_loss(fine_loss_conf, False)
 
         # Loss configuration for appearance specific losses
-        self.lambda_density = conf.get_float("loss.lambda_density")
+        self.lambda_density_coarse = conf.get_float("loss.lambda_density_coarse")
+        self.lambda_density_fine = conf.get_float("loss.lambda_density_fine")
         self.lambda_ref = conf.get_float("loss.lambda_ref")
         print(
-            "lambda density {} and reference {}".format(self.lambda_density, self.lambda_ref)
+            "lambda coarse density {}, fine density {}, and reference {}".format(self.lambda_density_coarse, self.lambda_density_fine, self.lambda_ref)
         )
         density_loss_conf = conf["loss.density"]
         self.density_app_crit = loss.get_density_loss(density_loss_conf)
@@ -376,11 +377,11 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         using_fine_app = len(fine_app) > 0
 
         rgb_loss = self.rgb_coarse_crit(coarse_app.rgb, all_rgb_gt) * self.lambda_coarse
-        loss_dict["ac"] = rgb_loss.item()
+        loss_dict["rc"] = rgb_loss.item()
         if using_fine_app:
-            fine_loss = self.rgb_fine_crit(fine_app.rgb, all_rgb_gt)
-            rgb_loss = rgb_loss + fine_loss * self.lambda_fine
-            loss_dict["af"] = fine_loss.item() * self.lambda_fine
+            fine_loss = self.rgb_fine_crit(fine_app.rgb, all_rgb_gt) * self.lambda_fine
+            rgb_loss += fine_loss
+            loss_dict["rf"] = fine_loss.item()
         
         return rgb_loss
 
@@ -394,12 +395,12 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         fine_app = app_render_dict.fine
         using_fine_app = len(fine_app) > 0
 
+        density_app_loss = self.density_app_crit(coarse_reg.depth.detach(), coarse_app.depth) * self.lambda_density_coarse
+        loss_dict["dc"] = density_app_loss.item()
         if using_fine_app:
-            density_app_loss = self.density_app_crit(fine_reg.depth.detach(), fine_app.depth)
-        else:
-            density_app_loss = self.density_app_crit(coarse_reg.depth.detach(), coarse_app.depth)
-        density_app_loss *= self.lambda_density
-        loss_dict["ad"] = density_app_loss.item()
+            density_app_loss_fine = self.density_app_crit(fine_reg.depth.detach(), fine_app.depth) * self.lambda_density_fine
+            density_app_loss += density_app_loss_fine
+            loss_dict["df"] = density_app_loss_fine.item()
 
         # We need to reshape our color data into image patches to feed reference encoder
         B, _, D, H, W = src_images.shape
@@ -413,7 +414,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             app_rgb = coarse_app.rgb.reshape(-1, D, Hs, Ws)
             app_rgb = F.interpolate(app_rgb, size=(H, W), mode="area")
             ref_app_loss = self.ref_app_crit(app_rgb) * self.lambda_ref
-        loss_dict["ar"] = ref_app_loss.item()
+        loss_dict["r"] = ref_app_loss.item()
 
         return density_app_loss + ref_app_loss
 
