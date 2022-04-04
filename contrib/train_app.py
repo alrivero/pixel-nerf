@@ -210,9 +210,9 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         
         curr_nviews = nviews[torch.randint(0, len(nviews), ()).item()]
         if curr_nviews == 1:
-            image_ord = torch.randint(0, NV, (SB, 1))
+            image_ord = torch.randint(0, NV, (SB, 1)).to(device=device)
         else:
-            image_ord = torch.empty((SB, curr_nviews), dtype=torch.long)
+            image_ord = torch.empty((SB, curr_nviews), dtype=torch.long).to(device=device)
         
         for obj_idx in range(SB):
             if curr_nviews > 1:
@@ -227,7 +227,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         src_poses = util.batched_index_select_nd(all_poses, image_ord)  # (SB, NS, 4, 4)
 
         return src_images, src_poses
-    
+
     def encode_chosen_views(self, data, src_images, src_poses):
         all_focals = data["focal"]  # (SB)
         all_c = data.get("c")  # (SB)
