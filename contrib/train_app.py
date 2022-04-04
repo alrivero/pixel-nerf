@@ -172,10 +172,14 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         # Loss configuration for appearance specific losses
         self.lambda_density_coarse = conf.get_float("loss.lambda_density_coarse")
         self.lambda_density_fine = conf.get_float("loss.lambda_density_fine")
-        self.lambda_ref = conf.get_float("loss.lambda_ref")
-        print(
-            "lambda coarse density {}, fine density {}, and reference {}".format(self.lambda_density_coarse, self.lambda_density_fine, self.lambda_ref)
-        )
+        self.lambda_ref_coarse = conf.get_float("loss.lambda_ref_coarse")
+        self.lambda_ref_fine = conf.get_float("loss.lambda_ref_fine")
+        print("lambda coarse density {}, fine density {}, reference coarse {}, and reference fine {}".format(
+            self.lambda_density_coarse,
+            self.lambda_density_fine,
+            self.lambda_ref_coarse,
+            self.lambda_ref_fine
+        ))
         density_loss_conf = conf["loss.density"]
         self.density_app_crit = loss.get_density_loss(density_loss_conf)
         self.ref_app_crit = loss.ReferenceColorLoss(conf, args.refencdir).to(device=device)
@@ -401,15 +405,17 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         SB, _, D, H, W = src_images.shape
         Hs = int(H * args.app_scale)
         Ws = int(W * args.app_scale)
+
+        app_rgb_coarse = coarse_app_patch.rgb.reshape(SB, D, Hs, Ws)
+        app_rgb_coarse = F.interpolate(app_rgb_coarse, size=(H, W), mode="area")
+        ref_app_loss = self.ref_app_crit(app_rgb_coarse) * self.lambda_ref_coarse
+        loss_dict["rec"] = ref_app_loss.item()
         if using_fine_app_patch:
-            app_rgb = fine_app_patch.rgb.reshape(SB, D, Hs, Ws)
-            app_rgb = F.interpolate(app_rgb, size=(H, W), mode="area")
-            ref_app_loss = self.ref_app_crit(app_rgb) * self.lambda_ref
-        else:
-            app_rgb = coarse_app_patch.rgb.reshape(SB, D, Hs, Ws)
-            app_rgb = F.interpolate(app_rgb, size=(H, W), mode="area")
-            ref_app_loss = self.ref_app_crit(app_rgb) * self.lambda_ref
-        loss_dict["r"] = ref_app_loss.item()
+            app_rgb_fine = fine_app_patch.rgb.reshape(SB, D, Hs, Ws)
+            app_rgb_fine = F.interpolate(app_rgb_fine, size=(H, W), mode="area")
+            ref_app_loss_fine = self.ref_app_crit(app_rgb_fine) * self.lambda_ref_fine
+            ref_app_loss += ref_app_loss_fine
+            loss_dict["ref"] = ref_app_loss.item()
 
         return ref_app_loss
 
