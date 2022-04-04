@@ -342,7 +342,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         all_rgb_gt = torch.stack(all_rgb_gt)  # (SB, ray_batch_size, 3)
         all_rays = torch.stack(all_rays)  # (SB, ray_batch_size, 8)
 
-        image_ord = torch.randint(0, NV, (SB, 1))
+        image_ord = torch.randint(0, NV, (SB, 1)).to(device=device)
         all_rays = util.batched_index_select_nd(all_rays, image_ord).reshape(SB, -1, 8)
         all_rgb_gt = util.batched_index_select_nd(all_rgb_gt, image_ord).reshape(SB, -1, 3)
 
