@@ -52,7 +52,7 @@ class AppearanceDataset(torch.utils.data.Dataset):
         self.all_objs = all_objs
         self.stage = stage
 
-        self.image_to_tensor = get_image_to_tensor_balanced()
+        self.image_to_tensor = get_image_to_tensor_balanced(image_size)
         print(
             "Loading Appearance dataset",
             self.base_path,
@@ -92,11 +92,6 @@ class AppearanceDataset(torch.utils.data.Dataset):
 
         # NOTE: Right now, no intrisic or extrinsic camera information is being used here!
         # Add it later in necessary! (Refer to DVRDataset)
-
-        if self.image_size is not None and img_tensor.shape[-2:] != self.image_size:
-            img_tensor = torch.unsqueeze(img_tensor, 0)
-            img_tensor = F.interpolate(img_tensor, size=self.image_size, mode="area")
-            img_tensor = torch.squeeze(img_tensor, 0)
         
         result = {
             "path": rgb_paths[img_ind],

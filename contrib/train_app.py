@@ -27,9 +27,9 @@ import torch.nn.functional as F
 import torch
 import tqdm
 from dotmap import DotMap
+from data.AppearanceDataset import AppearanceDataset
 from random import randint
 from torchvision.transforms.functional_tensor import crop
-from data.AppearanceDataset import AppearanceDataset
 
 
 def extra_args(parser):
@@ -64,6 +64,9 @@ def extra_args(parser):
     )
 
     parser.add_argument(
+        "--dset_ind", "-ID", type=int, default=0, help="Index of scene to be modified in dataset"
+    )
+    parser.add_argument(
         "--appdir", "-DA", type=str, default=None, help="Appearance Dataset directory"
     )
     parser.add_argument(
@@ -74,7 +77,7 @@ def extra_args(parser):
         help="Appearance format, eth3d (only for now)",
     )
     parser.add_argument(
-        "--app_ind", "-I", type=int, default=0, help="Index of image to be used for appearance harmonization"
+        "--app_ind", "-IA", type=int, default=0, help="Index of image to be used for appearance harmonization"
     )
     parser.add_argument(
         "--load_app_encoder",
@@ -105,7 +108,10 @@ def extra_args(parser):
         help="Which kind of ray smapling to do, either rand or patch",
     )
     parser.add_argument(
-        "--app_scale", "-AS", type=float, default=1.0, help="The scale of app scenes (FLESH OUT IDK)"
+        "--patch_dim", "-P", type=int, default=128, help="The H and W dimension of image patches (power of 2)"
+    )
+    parser.add_argument(
+        "--subpatch_factor", "-PS", type=int, default=1, help="patch_dim / subpatch_factor * 2 = subpatches rendered and composed (power of 2)"
     )
     return parser
 
@@ -194,12 +200,23 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         self.z_far = dset.z_far
 
         self.use_bbox = args.no_bbox_step > 0
-
         self.ray_type = args.ray_type
-        # self.pass_setup = self.rand_pass_setup if self.ray_type == "rand" else self.patch_pass_setup
+
+        # Set up ow we'll be processing patches
+        self.patch_dim = args.patch_dim
+        self.subpatch_factor = args.subpatch_factor
+
+        # Premeptively load both our background image and our dataset
+        self.nerf_data = dset[args.dset_ind]
+        SB = args.batch_size
+        NV, _, H, W = self.nerf_data["images"].shape
+        self.nerf_data["images"] = self.nerf_data["images"].unsqueeeze(0).expand(SB, NV, 3, H, W)
+        self.nerf_data["poses"] = self.nerf_data["poses"].unsqueeeze(0).expand(SB, NV, 4, 4)
+        self.nerf_data["bbox"] = self.nerf_data["bbox"].unsqueeeze(0).expand(SB, NV, 4)
+        self.nerf_data["focal"] = self.nerf_data["focal"].unsqueeeze(0).expand(SB, 2)
+        self.nerf_data["c"] = self.nerf_data["c"].unsqueeeze(0).expand(SB, 2)
 
         self.appearance_img = dset_app[args.app_ind]["images"].unsqueeze(0).to(device=device)
-        self.ref_app_crit.encode_targets(self.appearance_img)
 
     def post_batch(self, epoch, batch):
         renderer.sched_step(args.batch_size)
@@ -332,13 +349,12 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 rgb_gt_all.permute(0, 2, 3, 1).contiguous().reshape(-1, 3)
             ).reshape(NV, 3, H, W)
 
-            Hs = int(H * args.app_scale)
-            Ws = int(W * args.app_scale)
-            i = randint(0, H - Hs)
-            j = randint(0, W - Ws)
+            P = self.patch_dim
+            i = randint(0, H - P)
+            j = randint(0, W - P)
 
-            rgb_gt = crop(rgb_gt_all, i, j, Hs, Ws)
-            rays = crop(cam_rays, i, j, Hs, Ws)
+            rgb_gt = crop(rgb_gt_all, i, j, P, P)
+            rays = crop(cam_rays, i, j, P, P)
 
             all_rgb_gt.append(rgb_gt)
             all_rays.append(rays)
@@ -347,22 +363,37 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         all_rays = torch.stack(all_rays)  # (SB, ray_batch_size, 8)
 
         image_ord = torch.randint(0, NV, (SB, 1)).to(device=device)
-        all_rays = util.batched_index_select_nd(all_rays, image_ord).reshape(SB, -1, 8)
+        all_rays = util.batched_index_select_nd(all_rays, image_ord)
         all_rgb_gt = util.batched_index_select_nd(all_rgb_gt, image_ord).reshape(SB, -1, 3)
 
         all_poses = all_images = None
 
         return all_rays, all_rgb_gt
 
+    def encode_back_patch(self):
+        P = self.patch_dim
+        back_patch = util.get_random_patch(self.appearance_img, P, P)
+        self.ref_app_crit.encode_targets(back_patch)
+
     def reg_pass(self, all_rays):
         return DotMap(render_par(all_rays, want_weights=True, app_pass=False))
 
     def app_pass(self, app_imgs, all_rays):
+        SB = all_rays.shape[0]
+
         # Appearance encoder encoding
         net.app_encoder.encode(app_imgs)
-        render_dict = DotMap(render_par(all_rays, want_weights=True, app_pass=True))
 
-        return render_dict
+        # Now, we parition the rays corresponing to an image patch into smaller subpatches
+        ray_subpatches = util.decompose_to_subpatches(all_rays, self.subpatch_factor)
+        render_dicts = [[]] * self.subpatch_factor
+        for i in range(self.subpatch_factor):
+            for j in range(self.subpatch_factor):
+                ray_subpatch = ray_subpatches[i][j].reshape(SB, -1, 8)
+
+                render_dicts[i][j] = DotMap(render_par(ray_subpatch, want_weights=True, app_pass=True))
+
+        return render_dicts
 
     def nerf_loss(self, app_render_dict, all_rgb_gt, loss_dict):
         # Compute our standard PixelNeRF loss
@@ -398,7 +429,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
     def app_loss(self, src_images, app_patch_render_dict, loss_dict):
         coarse_app_patch = app_patch_render_dict.coarse
-        fine_app_patch = app_patch_render_dict.fine
+        fine_app_patch = util.ssh_normalization(app_patch_render_dict.fine)
         using_fine_app_patch = len(fine_app_patch) > 0
 
         # We need to reshape our color data into image patches to feed reference encoder
@@ -406,12 +437,12 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         Hs = int(H * args.app_scale)
         Ws = int(W * args.app_scale)
 
-        app_rgb_coarse = coarse_app_patch.rgb.reshape(SB, D, Hs, Ws)
+        app_rgb_coarse = util.ssh_normalization(coarse_app_patch.rgb.reshape(SB, D, Hs, Ws))
         app_rgb_coarse = F.interpolate(app_rgb_coarse, size=(H, W), mode="area")
         ref_app_loss = self.ref_app_crit(app_rgb_coarse) * self.lambda_ref_coarse
         loss_dict["rec"] = ref_app_loss.item()
         if using_fine_app_patch:
-            app_rgb_fine = fine_app_patch.rgb.reshape(SB, D, Hs, Ws)
+            app_rgb_fine = util.ssh_normalization(fine_app_patch.rgb.reshape(SB, D, Hs, Ws))
             app_rgb_fine = F.interpolate(app_rgb_fine, size=(H, W), mode="area")
             ref_app_loss_fine = self.ref_app_crit(app_rgb_fine) * self.lambda_ref_fine
             ref_app_loss += ref_app_loss_fine
@@ -432,10 +463,16 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         # Render out our scene with our ground truth model
         reg_render_dict = self.reg_pass(nerf_rays)
 
+        # Encode a random patch from the background image
+        self.encode_back_patch()
+
         # Render out our scene using appearance encoding and trainable F2
-        app_render_dict = self.app_pass(app_data, nerf_rays)
+        app_render_dicts = self.app_pass(app_data, nerf_rays)
 
         loss_dict = {}
+
+        # Merge the render_dicts of all our subpatches
+        app_render_dict = util.recompose_subpatch_render_dicts(app_render_dicts)
         
         # Compute our standard NeRF losses and losses associated with appearance encoder
         nerf_loss = self.nerf_loss(app_render_dict, nerf_rays_gt, loss_dict)
@@ -617,90 +654,84 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
             batch = 0
             for _ in range(self.num_epoch_repeats):
-                for data in self.train_data_loader:
-                    losses = self.train_step(data, self.appearance_img, global_step=step_id)
-                    loss_str = fmt_loss_str(losses)
-                    if batch % self.print_interval == 0:
-                        print(
-                            "E",
-                            epoch,
-                            "B",
-                            batch,
-                            loss_str,
-                            " lr",
-                            self.optim.param_groups[0]["lr"],
-                        )
+                losses = self.train_step(self.nerf_data, self.appearance_img, global_step=step_id)
+                loss_str = fmt_loss_str(losses)
+                if batch % self.print_interval == 0:
+                    print(
+                        "E",
+                        epoch,
+                        "B",
+                        batch,
+                        loss_str,
+                        " lr",
+                        self.optim.param_groups[0]["lr"],
+                    )
 
-                    if batch % self.eval_interval == 0:
-                        test_data = next(test_data_iter)
-                        self.net.eval()
-                        with torch.no_grad():
-                            test_losses = self.eval_step(test_data, self.appearance_img, global_step=step_id)
-                        self.net.train()
-                        test_loss_str = fmt_loss_str(test_losses)
-                        self.writer.add_scalars("train", losses, global_step=step_id)
+                if batch % self.eval_interval == 0:
+                    self.net.eval()
+                    with torch.no_grad():
+                        test_losses = self.eval_step(self.nerf_data, self.appearance_img, global_step=step_id)
+                    self.net.train()
+                    test_loss_str = fmt_loss_str(test_losses)
+                    self.writer.add_scalars("train", losses, global_step=step_id)
+                    self.writer.add_scalars(
+                        "test", test_losses, global_step=step_id
+                    )
+                    print("*** Eval:", "E", epoch, "B", batch, test_loss_str, " lr")
+
+                if batch % self.save_interval == 0 and (epoch > 0 or batch > 0):
+                    print("saving")
+                    if self.managed_weight_saving:
+                        self.net.save_weights(self.args)
+                    else:
+                        torch.save(
+                            self.net.state_dict(), self.default_net_state_path
+                        )
+                    torch.save(self.optim.state_dict(), self.optim_state_path)
+                    if self.lr_scheduler is not None:
+                        torch.save(
+                            self.lr_scheduler.state_dict(), self.lrsched_state_path
+                        )
+                    torch.save({"iter": step_id + 1}, self.iter_state_path)
+                    self.extra_save_state()
+
+                if batch % self.vis_interval == 0:
+                    print("generating visualization")
+                    
+                    # Render out the scene
+                    self.net.eval()
+                    with torch.no_grad():
+                        vis, vis_vals = self.vis_step(
+                            self.nerf_data, global_step=step_id
+                        )
+                    if vis_vals is not None:
                         self.writer.add_scalars(
-                            "test", test_losses, global_step=step_id
+                            "vis", vis_vals, global_step=step_id
                         )
-                        print("*** Eval:", "E", epoch, "B", batch, test_loss_str, " lr")
+                    self.net.train()
+                    if vis is not None:
+                        import imageio
 
-                    if batch % self.save_interval == 0 and (epoch > 0 or batch > 0):
-                        print("saving")
-                        if self.managed_weight_saving:
-                            self.net.save_weights(self.args)
-                        else:
-                            torch.save(
-                                self.net.state_dict(), self.default_net_state_path
-                            )
-                        torch.save(self.optim.state_dict(), self.optim_state_path)
-                        if self.lr_scheduler is not None:
-                            torch.save(
-                                self.lr_scheduler.state_dict(), self.lrsched_state_path
-                            )
-                        torch.save({"iter": step_id + 1}, self.iter_state_path)
-                        self.extra_save_state()
+                        vis_u8 = (vis * 255).astype(np.uint8)
+                        imageio.imwrite(
+                            os.path.join(
+                                self.visual_path,
+                                "{:04}_{:04}_vis.png".format(epoch, batch),
+                            ),
+                            vis_u8,
+                    )
+                if (
+                    batch == self.num_total_batches - 1
+                    or batch % self.accu_grad == self.accu_grad - 1
+                ):
+                    # torch.nn.utils.clip_grad_norm_(net.parameters(), 0.5)
+                    self.optim.step()
+                    self.optim.zero_grad()
 
-                    if batch % self.vis_interval == 0:
-                        print("generating visualization")
-                        if self.fixed_test:
-                            test_data = next(iter(self.test_data_loader))
-                        else:
-                            test_data = next(test_data_iter)
-                        
-                        # Render out the scene
-                        self.net.eval()
-                        with torch.no_grad():
-                            vis, vis_vals = self.vis_step(
-                                test_data, global_step=step_id
-                            )
-                        if vis_vals is not None:
-                            self.writer.add_scalars(
-                                "vis", vis_vals, global_step=step_id
-                            )
-                        self.net.train()
-                        if vis is not None:
-                            import imageio
-
-                            vis_u8 = (vis * 255).astype(np.uint8)
-                            imageio.imwrite(
-                                os.path.join(
-                                    self.visual_path,
-                                    "{:04}_{:04}_vis.png".format(epoch, batch),
-                                ),
-                                vis_u8,
-                        )
-                    if (
-                        batch == self.num_total_batches - 1
-                        or batch % self.accu_grad == self.accu_grad - 1
-                    ):
-                        # torch.nn.utils.clip_grad_norm_(net.parameters(), 0.5)
-                        self.optim.step()
-                        self.optim.zero_grad()
-
-                    self.post_batch(epoch, batch)
-                    step_id += 1
-                    batch += 1
-                    progress.update(1)
+                self.post_batch(epoch, batch)
+                step_id += 1
+                batch += 1
+                progress.update(1)
             if self.lr_scheduler is not None:
                 self.lr_scheduler.step()
 trainer = PixelNeRF_ATrainer()

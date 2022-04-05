@@ -8,7 +8,9 @@ import torch.nn.functional as F
 import functools
 import math
 import warnings
-
+from random import randint
+from torchvision.transforms.functional_tensor import crop
+from dotmap import DotMap
 
 def image_float_to_uint8(img):
     """
@@ -536,3 +538,54 @@ def get_module(net):
         return net.module
     else:
         return net
+
+def ssh_normalization(img_tensor):
+    return (img_tensor * 2.0) - 1.0 # normalization used for SSH encoder
+
+def get_random_patch(t, Hp, Wp):
+    H, W = t.shape[-2:]
+    i = randint(0, H - Hp)
+    j = randint(0, W - Wp)
+
+    return crop(t, i, j, Hp, Wp)
+
+def decompose_to_subpatches(patch, sub_factor):
+    HWp = patch.shape[-1]
+    HWs = HWp // sub_factor
+
+    subpatches = [[]] * sub_factor
+    for i in range(sub_factor):
+        for j in range(sub_factor):
+            subpatches[i].append(crop(HWp * i, HWp * j, HWp, HWp))
+    
+    return subpatches
+
+def recompose_subpatch_render_dicts(render_dicts):
+    recomposition = {}
+    coarse = []
+    fine = []
+    for i in range(len(render_dicts[i])):
+        for j in range(len(render_dicts[i])):
+            coarse.append(render_dicts[i][j].coarse)
+            fine.append(render_dicts[i][j].fine)
+
+    recomposition["coarse"] = torch.hstack(coarse)
+    recomposition["fine"] = torch.hstack(fine)
+    
+    for i in range(len(1, render_dicts)):
+        coarse = []
+        fine = []
+        for j in range(len(render_dicts[i])):
+            coarse.append(render_dicts[i][j].coarse)
+            fine.append(render_dicts[i][j].fine)
+        
+        recomposition["coarse"] = torch.vstack([
+            recomposition["coarse"],
+            torch.hstack(coarse)
+        ])
+        recomposition["fine"] = torch.vstack([
+            recomposition["fine"],
+            torch.hstack(coarse)
+        ])
+    
+    return DotMap(recomposition)
