@@ -602,8 +602,8 @@ def recompose_subpatch_render_dicts_rgb(render_dicts, SB, P, sub_factor):
         coarse.append(render_dicts[0][j].coarse.rgb.permute(0, 2, 1).reshape(SB, 3, HWp, HWp))
         fine.append(render_dicts[0][j].fine.rgb.permute(0, 2, 1).reshape(SB, 3, HWp, HWp))
 
-    patch_coarse_rgb = torch.hstack(coarse)
-    patch_fine_rgb = torch.hstack(fine)
+    patch_coarse_rgb = torch.cat(coarse, dim=1)
+    patch_fine_rgb = torch.cat(fine, dim=1)
     
     for i in range(len(1, render_dicts)):
         coarse = []
@@ -612,13 +612,11 @@ def recompose_subpatch_render_dicts_rgb(render_dicts, SB, P, sub_factor):
             coarse.append(render_dicts[i][j].coarse.rgb.permute(0, 2, 1).reshape(SB, 3, HWp, HWp))
             fine.append(render_dicts[i][j].fine.rgb.permute(0, 2, 1).reshape(SB, 3, HWp, HWp))
 
-        patch_coarse_rgb = torch.vstack([
-            patch_coarse_rgb,
-            torch.hstack(coarse)
-        ])
-        patch_fine_rgb = torch.vstack([
-            patch_fine_rgb,
-            torch.hstack(coarse)
-        ])
+        patch_coarse_rgb = torch.cat(
+            [patch_coarse_rgb, torch.cat(coarse, dim=1)],
+            dim=0)
+        patch_fine_rgb = torch.cat(
+            [patch_fine_rgb, torch.cat(fine, dim=1)],
+            dim=0)
     
     return patch_coarse_rgb, patch_fine_rgb
