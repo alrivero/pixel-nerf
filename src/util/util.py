@@ -1,3 +1,4 @@
+from unittest.mock import patch
 import cv2
 import numpy as np
 import torch
@@ -550,42 +551,70 @@ def get_random_patch(t, Hp, Wp):
     return crop(t, i, j, Hp, Wp)
 
 def decompose_to_subpatches(patch, sub_factor):
-    HWp = patch.shape[-1]
-    HWs = HWp // sub_factor
+    SB = patch.shape[0]
+    HWp = patch.shape[-1] // sub_factor
 
     subpatches = [[]] * sub_factor
     for i in range(sub_factor):
         for j in range(sub_factor):
-            subpatches[i].append(crop(HWp * i, HWp * j, HWp, HWp))
+            subpatches[i].append(crop(HWp * i, HWp * j, HWp, HWp).reshape(SB, -1, 3))
     
     return subpatches
 
-def recompose_subpatch_render_dicts(render_dicts):
-    recomposition = {}
+def recompose_subpatch_render_dicts_depth(render_dicts, SB, P):
     coarse = []
     fine = []
     for i in range(len(render_dicts[i])):
         for j in range(len(render_dicts[i])):
-            coarse.append(render_dicts[i][j].coarse)
-            fine.append(render_dicts[i][j].fine)
+            coarse.append(render_dicts[i][j].coarse.depth.reshape(SB, 3, P, P))
+            fine.append(render_dicts[i][j].fine.depth.reshape(SB, 3, P, P))
 
-    recomposition["coarse"] = torch.hstack(coarse)
-    recomposition["fine"] = torch.hstack(fine)
+    patch_coarse_depth = torch.hstack(coarse)
+    patch_fine_depth = torch.hstack(fine)
     
     for i in range(len(1, render_dicts)):
         coarse = []
         fine = []
         for j in range(len(render_dicts[i])):
-            coarse.append(render_dicts[i][j].coarse)
-            fine.append(render_dicts[i][j].fine)
-        
-        recomposition["coarse"] = torch.vstack([
-            recomposition["coarse"],
+            coarse.append(render_dicts[i][j].coarse.depth.reshape(SB, 3, P, P))
+            fine.append(render_dicts[i][j].fine.depth.reshape(SB, 3, P, P))
+
+        patch_coarse_depth = torch.vstack([
+            patch_coarse_depth,
             torch.hstack(coarse)
         ])
-        recomposition["fine"] = torch.vstack([
-            recomposition["fine"],
+        patch_fine_depth = torch.vstack([
+            patch_fine_depth,
             torch.hstack(coarse)
         ])
     
-    return DotMap(recomposition)
+    return patch_coarse_depth, patch_fine_depth
+
+def recompose_subpatch_render_dicts_rgb(render_dicts, SB, P):
+    coarse = []
+    fine = []
+    for i in range(len(render_dicts)):
+        for j in range(len(render_dicts[i])):
+            coarse.append(render_dicts[i][j].coarse.rgb.reshape(SB, 3, P, P))
+            fine.append(render_dicts[i][j].fine.rgb.reshape(SB, 3, P, P))
+
+    patch_coarse_rgb = torch.hstack(coarse)
+    patch_fine_rgb = torch.hstack(fine)
+    
+    for i in range(len(1, render_dicts)):
+        coarse = []
+        fine = []
+        for j in range(len(render_dicts[i])):
+            coarse.append(render_dicts[i][j].coarse.rgb.reshape(SB, 3, P, P))
+            fine.append(render_dicts[i][j].fine.rgb.reshape(SB, 3, P, P))
+
+        patch_coarse_rgb = torch.vstack([
+            patch_coarse_rgb,
+            torch.hstack(coarse)
+        ])
+        patch_fine_rgb = torch.vstack([
+            patch_fine_rgb,
+            torch.hstack(coarse)
+        ])
+    
+    return patch_coarse_rgb, patch_fine_rgb
