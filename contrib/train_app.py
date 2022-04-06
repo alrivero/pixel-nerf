@@ -212,7 +212,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         NV, _, H, W = self.nerf_data["images"].shape
         self.nerf_data["images"] = self.nerf_data["images"].unsqueeze(0).expand(SB, NV, 3, H, W)
         self.nerf_data["poses"] = self.nerf_data["poses"].unsqueeze(0).expand(SB, NV, 4, 4)
-        self.nerf_data["bbox"] = self.nerf_data["bbox"].unsqueeze(0).expand(SB, NV, 4)
         self.nerf_data["focal"] = self.nerf_data["focal"].unsqueeze(0).expand(SB, 2)
         self.nerf_data["c"] = self.nerf_data["c"].unsqueeze(0).expand(SB, 2)
 
