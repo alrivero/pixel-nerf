@@ -210,11 +210,11 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         self.nerf_data = dset[args.dset_ind]
         SB = args.batch_size
         NV, _, H, W = self.nerf_data["images"].shape
-        self.nerf_data["images"] = self.nerf_data["images"].unsqueeeze(0).expand(SB, NV, 3, H, W)
-        self.nerf_data["poses"] = self.nerf_data["poses"].unsqueeeze(0).expand(SB, NV, 4, 4)
-        self.nerf_data["bbox"] = self.nerf_data["bbox"].unsqueeeze(0).expand(SB, NV, 4)
-        self.nerf_data["focal"] = self.nerf_data["focal"].unsqueeeze(0).expand(SB, 2)
-        self.nerf_data["c"] = self.nerf_data["c"].unsqueeeze(0).expand(SB, 2)
+        self.nerf_data["images"] = self.nerf_data["images"].unsqueeze(0).expand(SB, NV, 3, H, W)
+        self.nerf_data["poses"] = self.nerf_data["poses"].unsqueeze(0).expand(SB, NV, 4, 4)
+        self.nerf_data["bbox"] = self.nerf_data["bbox"].unsqueeze(0).expand(SB, NV, 4)
+        self.nerf_data["focal"] = self.nerf_data["focal"].unsqueeze(0).expand(SB, 2)
+        self.nerf_data["c"] = self.nerf_data["c"].unsqueeze(0).expand(SB, 2)
 
         self.appearance_img = dset_app[args.app_ind]["images"].unsqueeze(0).to(device=device)
         self.ssh_dim = (256, 256)
