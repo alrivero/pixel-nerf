@@ -557,7 +557,7 @@ def decompose_to_subpatches(patch, sub_factor):
     subpatches = [[]] * sub_factor
     for i in range(sub_factor):
         for j in range(sub_factor):
-            subpatches[i].append(crop(HWp * i, HWp * j, HWp, HWp).reshape(SB, -1, 3))
+            subpatches[i].append(crop(patch, HWp * i, HWp * j, HWp, HWp).reshape(SB, -1, 3))
     
     return subpatches
 
