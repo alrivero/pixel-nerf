@@ -423,7 +423,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         P = self.patch_dim
 
         # Going to assume fine network is here. If its an issue, change later.
-        coarse_app_rgb, fine_app_rgb = util.recompose_subpatch_render_dicts_rgb(subpatch_dicts, SB, P)
+        coarse_app_rgb, fine_app_rgb = util.recompose_subpatch_render_dicts_rgb(subpatch_dicts, SB, P, self.subpatch_factor)
 
         app_rgb_coarse = util.ssh_normalization(coarse_app_rgb)
         app_rgb_coarse = F.interpolate(app_rgb_coarse, size=self.ssh_dim, mode="area")
