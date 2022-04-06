@@ -473,10 +473,12 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         subpatch_rays = util.decompose_to_subpatches(patch_rays, self.subpatch_factor)
 
         # Render out these subpatches
-        subpatch_dicts = [[]] * self.subpatch_factor
+        subpatch_dicts = []
         for i in range(self.subpatch_factor):
+            row = []
             for j in range(self.subpatch_factor):
-                subpatch_dicts[i][j] = self.app_pass(app_data, subpatch_rays[i][j])
+                row.append(self.app_pass(app_data, subpatch_rays[i][j]))
+            subpatch_dicts.append(row)
 
         # Compute our appearance loss using our appearance encoder and these subpatches
         app_loss = self.app_loss(src_images, subpatch_dicts, loss_dict)
