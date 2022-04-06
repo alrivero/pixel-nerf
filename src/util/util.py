@@ -605,7 +605,7 @@ def recompose_subpatch_render_dicts_rgb(render_dicts, SB, P, sub_factor):
     patch_coarse_rgb = torch.cat(coarse, dim=1)
     patch_fine_rgb = torch.cat(fine, dim=1)
     
-    for i in range(len(1, render_dicts)):
+    for i in range(1, len(render_dicts)):
         coarse = []
         fine = []
         for j in range(len(render_dicts[i])):
