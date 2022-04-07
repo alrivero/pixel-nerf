@@ -112,6 +112,12 @@ def extra_args(parser):
     parser.add_argument(
         "--subpatch_factor", "-PS", type=int, default=1, help="patch_dim / subpatch_factor * 2 = subpatches rendered and composed (power of 2)"
     )
+    parser.add_argument(
+        "--vis_step_off",
+        action="store_true",
+        default=None,
+        help="Skip the visualization steps of our scene",
+    )
     return parser
 
 
@@ -228,6 +234,9 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             self.ssh_dim = (256, 256) # Original processing resolution of SHH Encoder
         else:
             self.appearance_img = None
+        
+        # Choose whether to skip visualizing our scene every epoch
+        self.vis_step_on = not args.vis_step_off
 
     def post_batch(self, epoch, batch):
         renderer.sched_step(args.batch_size)
@@ -715,7 +724,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                     torch.save({"iter": step_id + 1}, self.iter_state_path)
                     self.extra_save_state()
 
-                if batch % self.vis_interval == 0:
+                if self.vis_step_on and batch % self.vis_interval == 0:
                     print("generating visualization")
                     
                     # Render out the scene
