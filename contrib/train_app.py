@@ -107,13 +107,6 @@ def extra_args(parser):
         "--refencdir", "-DRE", type=str, default=None, help="Reference encoder directory (used for loss)"
     )
     parser.add_argument(
-        "--ray_type",
-        "-RT",
-        type=str,
-        default=None,
-        help="Which kind of ray smapling to do, either rand or patch",
-    )
-    parser.add_argument(
         "--patch_dim", "-P", type=int, default=128, help="The H and W dimension of image patches (power of 2)"
     )
     parser.add_argument(
@@ -132,7 +125,8 @@ if (app_size_h is not None and app_size_w is not None):
     app_size = (app_size_h, app_size_w)
 
 dset, val_dset, _ = get_split_dataset(args.dataset_format, args.datadir)
-dset_app = AppearanceDataset(args.appdir, "train", image_size=app_size, img_ind=args.app_ind)
+if not args.app_enc_off:
+    dset_app = AppearanceDataset(args.appdir, "train", image_size=app_size, img_ind=args.app_ind)
 print(
     "dset z_near {}, z_far {}, lindisp {}".format(dset.z_near, dset.z_far, dset.lindisp)
 )
@@ -211,7 +205,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         self.z_far = dset.z_far
 
         self.use_bbox = args.no_bbox_step > 0
-        self.ray_type = args.ray_type
 
         # Premeptively our dataset as we train on a single scene
         self.nerf_data = dset[args.dset_ind]
