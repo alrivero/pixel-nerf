@@ -328,7 +328,7 @@ class PixelNeRFNet_A(torch.nn.Module):
             )
         
         # Just load our weights if we're not doing anything with the appearance encoder
-        if not self.app_encoder_on:
+        if not self.app_enc_on:
             return
 
         # Make a copy of F2 for ground truth evaluation
