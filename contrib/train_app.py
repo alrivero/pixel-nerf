@@ -92,6 +92,12 @@ def extra_args(parser):
         help="Freeze appearance encoder weights and only train MLP",
     )
     parser.add_argument(
+        "--app_enc_off",
+        action="store_true",
+        default=None,
+        help="Train without appearance encoder enhancements",
+    )
+    parser.add_argument(
         "--freeze_f1",
         action="store_true",
         default=None,
@@ -133,15 +139,21 @@ print(
 
 net = make_model(
     conf["model"],
+    app_enc_on = not args.app_enc_off,
     stop_encoder_grad=args.freeze_enc,
     stop_app_encoder_grad=args.freeze_app_enc,
-    stop_f1_grad=args.freeze_f1,
+    stop_f1_grad=args.freeze_f1
 ).to(device=device)
 
 
 if args.freeze_enc:
     print("Encoder frozen")
     net.encoder.eval()
+
+if args.app_enc_off:
+    print("Appearance encoder OFF (training normally)")
+else:
+    print("Appearance encoder on")
 
 if args.freeze_app_enc:
     print("Appearance encoder weights frozen")
@@ -154,7 +166,6 @@ renderer = NeRFRenderer.from_conf(conf["renderer"], lindisp=dset.lindisp,).to(
 # Parallize
 render_par = renderer.bind_parallel(net, args.gpu_id).eval()
 nviews = list(map(int, args.nviews.split()))
-
 
 class PixelNeRF_ATrainer(trainlib.Trainer):
     def __init__(self):
@@ -202,11 +213,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         self.use_bbox = args.no_bbox_step > 0
         self.ray_type = args.ray_type
 
-        # Set up ow we'll be processing patches
-        self.patch_dim = args.patch_dim
-        self.subpatch_factor = args.subpatch_factor
-
-        # Premeptively load both our background image and our dataset
+        # Premeptively our dataset as we train on a single scene
         self.nerf_data = dset[args.dset_ind]
         SB = args.batch_size
         NV, _, H, W = self.nerf_data["images"].shape
@@ -215,8 +222,19 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         self.nerf_data["focal"] = self.nerf_data["focal"].unsqueeze(0).expand(SB, 2)
         self.nerf_data["c"] = self.nerf_data["c"].unsqueeze(0).expand(SB, 2)
 
-        self.appearance_img = dset_app[args.app_ind]["images"].unsqueeze(0).to(device=device)
-        self.ssh_dim = (256, 256)
+        # Decide whether you're training with or without the appearance encoder
+        self.app_enc_on = not args.app_enc_off
+        self.calc_losses = self.calc_losses_app if self.app_enc_on else self.calc_losses_no_app
+
+        # If we are, that means we're using a background and patch loss
+        if self.app_enc_on:
+            self.appearance_img = dset_app[args.app_ind]["images"].unsqueeze(0).to(device=device)
+
+            self.patch_dim = args.patch_dim
+            self.subpatch_factor = args.subpatch_factor
+            self.ssh_dim = (256, 256) # Original processing resolution of SHH Encoder
+        else:
+            self.appearance_img = None
 
     def post_batch(self, epoch, batch):
         renderer.sched_step(args.batch_size)
@@ -386,16 +404,16 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         return render_dict
 
-    def nerf_loss(self, app_render_dict, all_rgb_gt, loss_dict):
+    def nerf_loss(self, render_dict, all_rgb_gt, loss_dict):
         # Compute our standard PixelNeRF loss
-        coarse_app = app_render_dict.coarse
-        fine_app = app_render_dict.fine
-        using_fine_app = len(fine_app) > 0
+        coarse = render_dict.coarse
+        fine = render_dict.fine
+        using_fine = len(fine) > 0
 
-        rgb_loss = self.rgb_coarse_crit(coarse_app.rgb, all_rgb_gt) * self.lambda_coarse
+        rgb_loss = self.rgb_coarse_crit(coarse.rgb, all_rgb_gt) * self.lambda_coarse
         loss_dict["rc"] = rgb_loss.item()
-        if using_fine_app:
-            fine_loss = self.rgb_fine_crit(fine_app.rgb, all_rgb_gt) * self.lambda_fine
+        if using_fine:
+            fine_loss = self.rgb_fine_crit(fine.rgb, all_rgb_gt) * self.lambda_fine
             rgb_loss += fine_loss
             loss_dict["rf"] = fine_loss.item()
         
@@ -438,7 +456,27 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         return ref_app_loss
 
-    def calc_losses(self, data, app_data, is_train=True, global_step=0):
+    def calc_losses_no_app(self, data, app_data, is_train=True, global_step=0):
+        # Establish the views we'll be using to train
+        _, _ = self.choose_views(data)
+
+        # Choose our standard randomly-smapled rays for our regular pass
+        nerf_rays, nerf_rays_gt = self.rand_rays(data, is_train, global_step)
+
+        # Render out our scene with our ground truth model
+        reg_render_dict = self.reg_pass(nerf_rays)
+
+        loss_dict = {}
+        
+        # Compute our standard NeRF losses and losses associated with appearance encoder
+        loss = self.nerf_loss(reg_render_dict, nerf_rays_gt, loss_dict)
+        if is_train:
+            loss.backward()
+        loss_dict["t"] = loss.item()
+
+        return loss_dict
+
+    def calc_losses_app(self, data, app_data, is_train=True, global_step=0):
         # Establish the views we'll be using to train
         src_images, src_poses = self.choose_views(data)
 
@@ -509,7 +547,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             print(idx)
             batch_idx = idx
         images = data["images"][batch_idx].to(device=device)  # (NV, 3, H, W)
-        app_images = self.appearance_img
+        if self.app_enc_on:
+            app_images = self.appearance_img
         poses = data["poses"][batch_idx].to(device=device)  # (NV, 4, 4)
         focal = data["focal"][batch_idx : batch_idx + 1]  # (1)
         c = data.get("c")
@@ -548,7 +587,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 focal.to(device=device),
                 c=c.to(device=device) if c is not None else None,
             )
-            net.app_encoder.encode(app_images)
+            if self.app_enc_on:
+                net.app_encoder.encode(app_images)
             test_rays = test_rays.reshape(1, H * W, -1)
             render_dict = DotMap(render_par(test_rays, want_weights=True))
             coarse = render_dict.coarse
@@ -581,11 +621,11 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             alpha_coarse_cmap,
         ]
 
-        app_images_0to1 = app_images * 0.5 + 0.5  # (NV, 3, H, W)
-        Wa = app_images.shape[-1]
-        app_gt = app_images_0to1[batch_idx].permute(1, 2, 0).cpu().numpy().reshape(H, Wa, 3)
-
-        vis_list.append(app_gt)
+        if self.app_enc_on:
+            app_images_0to1 = app_images * 0.5 + 0.5  # (NV, 3, H, W)
+            Wa = app_images.shape[-1]
+            app_gt = app_images_0to1[batch_idx].permute(1, 2, 0).cpu().numpy().reshape(H, Wa, 3)
+            vis_list.append(app_gt)
 
         vis_coarse = np.hstack(vis_list)
         vis = vis_coarse
@@ -607,10 +647,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 alpha_fine_cmap,
             ]
 
-            app_images_0to1 = app_images * 0.5 + 0.5  # (NV, 3, H, W)
-            Wa = app_images.shape[-1]
-            app_gt = app_images_0to1[batch_idx].permute(1, 2, 0).cpu().numpy().reshape(H, Wa, 3)
-            vis_list.append(app_gt)
+            if self.app_enc_on:
+                vis_list.append(app_gt)
 
             vis_fine = np.hstack(vis_list)
             vis = np.vstack((vis_coarse, vis_fine))
@@ -630,15 +668,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         def fmt_loss_str(losses):
             return "loss " + (" ".join(k + ":" + str(losses[k]) for k in losses))
 
-        def data_loop(dl):
-            """
-            Loop an iterable infinitely
-            """
-            while True:
-                for x in iter(dl):
-                    yield x
-
-        test_data_iter = data_loop(self.test_data_loader)
         step_id = self.start_iter_id
 
         progress = tqdm.tqdm(bar_format="[{rate_fmt}] ")

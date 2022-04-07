@@ -61,7 +61,6 @@ class ResnetBlockFC(nn.Module):
                 x_s = x
             return x_s + dx
 
-
 class ResnetFC(nn.Module):
     def __init__(
         self,
@@ -210,7 +209,8 @@ class ResnetFC_App(ResnetFC):
         combine_layer=1000,
         combine_type="average",
         use_spade=False,
-        stop_f1_grad=False
+        stop_f1_grad=False,
+        app_enc_on=True
     ):
         """
         :param d_in input size
@@ -224,13 +224,14 @@ class ResnetFC_App(ResnetFC):
 
         self.stop_f1_grad = stop_f1_grad
 
-        size_in = self.blocks[self.combine_layer - 1].size_out + app_in
-        size_out = self.blocks[self.combine_layer].size_out
-
-        self.app_trans_block = ResnetBlockFC(size_in, size_out, size_out, beta)
-        self.app_blocks = nn.ModuleList(
-            [ResnetBlockFC(d_hidden, beta=beta) for _ in range(self.combine_layer, self.n_blocks)]
-        )
+        self.app_enc_on = app_enc_on
+        if self.app_enc_on:
+            size_in = self.blocks[self.combine_layer - 1].size_out + app_in
+            size_out = self.blocks[self.combine_layer].size_out
+            self.app_trans_block = ResnetBlockFC(size_in, size_out, size_out, beta)
+            self.app_blocks = nn.ModuleList(
+                [ResnetBlockFC(d_hidden, beta=beta) for _ in range(self.combine_layer, self.n_blocks)]
+            )
 
     
     def forward(self, zx, app_enc, combine_inner_dims=(1,), combine_index=None, dim_size=None):

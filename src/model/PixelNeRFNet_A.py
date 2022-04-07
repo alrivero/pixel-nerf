@@ -12,7 +12,7 @@ from torch import nn
 
 class PixelNeRFNet_A(torch.nn.Module):
     # For now, identical to the PixelNeRF
-    def __init__(self, conf, stop_encoder_grad=False, stop_app_encoder_grad=False, stop_f1_grad=False):
+    def __init__(self, conf, app_enc_on=True, stop_encoder_grad=False, stop_app_encoder_grad=False, stop_f1_grad=False):
         """
         :param conf PyHocon config subtree 'model'
         """
@@ -72,6 +72,7 @@ class PixelNeRFNet_A(torch.nn.Module):
             d_in, d_latent, 
             d_out=d_out, 
             stop_f1_grad=stop_f1_grad,
+            app_enc_on=app_enc_on
         )
         self.mlp_fine = make_mlp(
             conf["mlp_fine"], 
@@ -80,6 +81,7 @@ class PixelNeRFNet_A(torch.nn.Module):
             d_out=d_out, 
             allow_empty=True, 
             stop_f1_grad=stop_f1_grad,
+            app_enc_on=app_enc_on
         )
         # Note: this is world -> camera, and bottom row is omitted
         self.register_buffer("poses", torch.empty(1, 3, 4), persistent=False)
@@ -96,8 +98,10 @@ class PixelNeRFNet_A(torch.nn.Module):
         self.num_views_per_obj = 1
 
         # Appearance encoder additions
-        self.stop_app_encoder_grad = stop_app_encoder_grad
-        self.app_encoder = AppearanceEncoder(conf["app_encoder"])
+        self.app_enc_on = app_enc_on
+        if self.app_enc_on:
+            self.stop_app_encoder_grad = stop_app_encoder_grad
+            self.app_encoder = AppearanceEncoder(conf["app_encoder"])
 
     def encode(self, images, poses, focal, z_bounds=None, c=None):
         """
@@ -156,7 +160,6 @@ class PixelNeRFNet_A(torch.nn.Module):
         if self.use_global_encoder:
             self.global_encoder(images)
 
-    
     def forward(self, xyz, coarse=True, viewdirs=None, app_pass=True, far=False):
         """
         Predict (r, g, b, sigma) at world space points xyz.
@@ -250,7 +253,7 @@ class PixelNeRFNet_A(torch.nn.Module):
             
             # Added appearance encoder as input to MLP
             app_enc = None
-            if app_pass:
+            if self.app_enc_on and app_pass:
                 app_enc = self.app_encoder.app_encoding.to(mlp_input.get_device())
                 if self.stop_app_encoder_grad:
                     app_enc = app_enc.detach()
@@ -323,6 +326,10 @@ class PixelNeRFNet_A(torch.nn.Module):
                     + "If training, unless you are startin a new experiment, please remember to pass --resume."
                 ).format(model_path)
             )
+        
+        # Just load our weights if we're not doing anything with the appearance encoder
+        if not self.app_encoder_on:
+            return
 
         # Make a copy of F2 for ground truth evaluation
         if not args.resume:
