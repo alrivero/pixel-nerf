@@ -65,6 +65,12 @@ def extra_args(parser):
     parser.add_argument(
         "--app_ind", "-IA", type=int, default=0, help="Index of image to be used for appearance harmonization"
     )
+    parser.add_argument(
+        "--load_app_encoder",
+        action="store_true",
+        default=None,
+        help="Load an appearance encoder's weights",
+    )
     return parser
 
 
