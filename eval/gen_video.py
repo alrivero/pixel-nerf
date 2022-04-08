@@ -60,6 +60,9 @@ def extra_args(parser):
     parser.add_argument("--fps", type=int, default=30, help="FPS of video")
 
     parser.add_argument(
+        "--appdir", "-DA", type=str, default=None, help="Appearance Dataset directory"
+    )
+    parser.add_argument(
         "--app_ind", "-IA", type=int, default=0, help="Index of image to be used for appearance harmonization"
     )
     return parser
@@ -70,7 +73,7 @@ args.resume = True
 
 device = util.get_cuda(args.gpu_id[0])
 
-dset = get_split_dataset(
+dset, _, _  = get_split_dataset(
     args.dataset_format, args.datadir, want_split=args.split, training=False
 )
 
