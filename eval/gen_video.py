@@ -73,8 +73,8 @@ args.resume = True
 
 device = util.get_cuda(args.gpu_id[0])
 
-dset, _, _  = get_split_dataset(
-    args.dataset_format, args.datadir, want_split=args.split, training=False
+dset, _, _ = get_split_dataset(
+    args.dataset_format, args.datadir, training=False
 )
 
 data = dset[args.subset]
@@ -240,7 +240,7 @@ with torch.no_grad():
 
 print("Writing video")
 vid_name = "{:04}".format(args.subset)
-if args.split == "test":
+if args.split == "train":
     vid_name = "t" + vid_name
 elif args.split == "val":
     vid_name = "v" + vid_name
