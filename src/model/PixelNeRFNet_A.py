@@ -358,7 +358,8 @@ class PixelNeRFNet_A(torch.nn.Module):
                     ).format(model_path)
                 )
         # Otherwise, initialize the weights for the encoder using Kaming Normal initialization
-        else:
+        # if starting from scratch
+        elif not args.resume:
             def init_weights(m):
                 if isinstance(m, (nn.Linear, nn.Conv2d)):
                     nn.init.kaiming_normal_(m.weight)
