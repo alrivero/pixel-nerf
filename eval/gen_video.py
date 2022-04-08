@@ -16,6 +16,7 @@ from render import NeRFRenderer
 from model import make_model
 from scipy.interpolate import CubicSpline
 import tqdm
+from data.AppearanceDataset import AppearanceDataset
 
 
 def extra_args(parser):
@@ -57,6 +58,10 @@ def extra_args(parser):
         help="Distance of camera from origin, default is average of z_far, z_near of dataset (only for non-DTU)",
     )
     parser.add_argument("--fps", type=int, default=30, help="FPS of video")
+
+    parser.add_argument(
+        "--app_ind", "-IA", type=int, default=0, help="Index of image to be used for appearance harmonization"
+    )
     return parser
 
 
@@ -115,7 +120,15 @@ z_far = dset.z_far
 
 print("Generating rays")
 
+# app_size = None
+# app_size_h = conf.get_int("data.app_data.img_size_h", None)
+# app_size_w = conf.get_int("data.app_data.img_size_w", None)
+# if (app_size_h is not None and app_size_w is not None):
+#     app_size = (app_size_h, app_size_w)
 dtu_format = hasattr(dset, "sub_format") and dset.sub_format == "dtu"
+
+dset_app = AppearanceDataset(args.appdir, "train", image_size=None, img_ind=args.app_ind)
+app_imgs = dset_app[args.app_ind]["images"].unsqueeze(0).to(device=device)
 
 if dtu_format:
     print("Using DTU camera trajectory")
@@ -200,7 +213,8 @@ with torch.no_grad():
         src_view = torch.randint(0, NV, (1,))
     else:
         src_view = source
-
+    
+    net.app_encoder.encode(app_imgs)
     net.encode(
         images[src_view].unsqueeze(0),
         poses[src_view].unsqueeze(0).to(device=device),
