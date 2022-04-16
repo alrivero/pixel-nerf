@@ -620,3 +620,23 @@ def recompose_subpatch_render_dicts_rgb(render_dicts, SB, P, sub_factor):
             dim=2)
     
     return patch_coarse_rgb, patch_fine_rgb
+
+def unit_sphere_intesection(rays):
+    cam_pos = rays[:, [0, 1, 2]]
+    cam_dir = rays[:, [3, 4, 5]]
+
+    # Since our sphere center is at 0, 0, 0, calculations simplify
+    cam_pos_proj = (cam_pos * cam_dir).sum(dim=0) * cam_dir
+    dist_proj_cent = torch.sqrt((cam_pos ** 2) - (cam_pos_proj ** 2))
+
+    return cam_pos_proj - dist_proj_cent
+
+def spherical_intersection_to_map_proj(map, intersections):
+    x = intersections[:, 0]
+    y = intersections[:, 1]
+    z = intersections[:, 2]
+
+    u = torch.atan(torch.sqrt(x + y) / z)
+    v = y
+
+    return torch.cat([u, v], dim=0)
