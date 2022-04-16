@@ -12,7 +12,6 @@ import warnings
 from random import randint
 from torchvision.transforms.functional_tensor import crop
 from dotmap import DotMap
-from torch import linalg as LA
 from math import pi
 
 def image_float_to_uint8(img):
@@ -623,10 +622,10 @@ def recompose_subpatch_render_dicts_rgb(render_dicts, SB, P, sub_factor):
     
     return patch_coarse_rgb, patch_fine_rgb
 
-def unit_sphere_intesection(rays):
+def unit_sphere_intersection(rays):
     cam_pos = rays[:, [0, 1, 2]]
     cam_dir = rays[:, [3, 4, 5]]
-    cam_pos_dist = LA.norm(cam_pos, ord=2)
+    cam_pos_dist = torch.norm(cam_pos, ord=2, dim=0)
 
     # Since our sphere center is at 0, 0, 0, calculations simplify
     cam_pos_proj_len = (cam_pos * cam_dir).sum(dim=0)
@@ -639,9 +638,9 @@ def spherical_intersection_to_map_proj(map, intersections):
     x = intersections[:, 0]
     y = intersections[:, 1]
     z = intersections[:, 2]
-    width = map.shape[-1]
+    height, width = map.shape[-2:-1]
 
     u = width * (torch.atan(torch.sqrt(x + y) / z) % (2 * pi))
-    v = y
+    v = height * (y - 0.5)
 
     return torch.cat([u, v], dim=0)
