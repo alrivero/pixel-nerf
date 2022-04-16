@@ -625,7 +625,7 @@ def recompose_subpatch_render_dicts_rgb(render_dicts, SB, P, sub_factor):
 def unit_sphere_intersection(rays):
     cam_pos = rays[:, [0, 1, 2]]
     cam_dir = rays[:, [3, 4, 5]]
-    cam_pos_dist = torch.norm(cam_pos, p=2, dim=0)
+    cam_pos_dist = torch.norm(cam_pos, p=2, dim=1)
 
     # Since our sphere center is at 0, 0, 0, calculations simplify
     cam_pos_proj_len = (cam_pos * cam_dir).sum(dim=0)
