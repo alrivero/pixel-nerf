@@ -87,7 +87,7 @@ class AppearanceDataset(torch.utils.data.Dataset):
         
         # Get images from this directory
         all_imgs = []
-        for rgb_path in enumerate(rgb_paths):
+        for _, rgb_path in enumerate(rgb_paths):
             img = imageio.imread(rgb_path)[..., :3]
             img_tensor = self.image_to_tensor(img)
 
