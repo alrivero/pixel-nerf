@@ -94,7 +94,7 @@ class NeRFRenderer(torch.nn.Module):
             "last_sched", torch.tensor(0, dtype=torch.long), persistent=True
         )
 
-    def sample_spherical_rgb(rays, radii, app_imgs):
+    def sample_spherical_rgb(self, rays, radii, app_imgs):
         sph_intersects = util.sphere_intersection(rays, radii)
         uv_env = util.spherical_intersection_to_map_proj(app_imgs, sph_intersects, radii)
 
