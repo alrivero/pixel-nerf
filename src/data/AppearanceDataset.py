@@ -88,8 +88,8 @@ class AppearanceDataset(torch.utils.data.Dataset):
         all_imgs = []
         for _, rgb_path in enumerate(rgb_paths):
             img = Image.open(rgb_path)
+            img  = self.resize(img)
             img_tensor = self.image_to_tensor(img)
-            img_tensor  = self.resize(img_tensor)
 
             all_imgs.append(img_tensor)
         all_imgs = torch.stack(all_imgs)
