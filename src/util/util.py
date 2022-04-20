@@ -661,7 +661,7 @@ def sphere_intersection(rays, radii):
     radii = radii.expand(1, B)
     dist_intersect = torch.sqrt((radii ** 2) - (dist_proj_cent ** 2))
     t = cam_pos_proj_len - dist_intersect
-    t = t.unsqueeze(2).repeat(1, 1, 3)
+    t = t.unsqueeze(2)
 
     return cam_pos + cam_dir * t
 
