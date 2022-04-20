@@ -77,31 +77,16 @@ def extra_args(parser):
         help="Appearance format, eth3d (only for now)",
     )
     parser.add_argument(
-        "--app_ind", "-IA", type=int, default=0, help="Index of image to be used for appearance harmonization"
+        "--app_set_ind", "-IA", type=int, default=0, help="Index of folder of images to be used for appearance harmonization"
     )
     parser.add_argument(
-        "--load_app_encoder",
-        action="store_true",
-        default=None,
-        help="Load an appearance encoder's weights",
-    )
-    parser.add_argument(
-        "--freeze_app_enc",
-        action="store_true",
-        default=None,
-        help="Freeze appearance encoder weights and only train MLP",
+        "--app_ind", "-IM", type=int, default=0, help="Index of image in folder to be used for appearance harmonization"
     )
     parser.add_argument(
         "--app_enc_off",
         action="store_true",
         default=None,
         help="Train without appearance encoder enhancements",
-    )
-    parser.add_argument(
-        "--freeze_f1",
-        action="store_true",
-        default=None,
-        help="Freeze first multi-view network weights and only train later MLP",
     )
     parser.add_argument(
         "--refencdir", "-DRE", type=str, default=None, help="Reference encoder directory (used for loss)"
@@ -141,8 +126,6 @@ net = make_model(
     conf["model"],
     app_enc_on = not args.app_enc_off,
     stop_encoder_grad=args.freeze_enc,
-    stop_app_encoder_grad=args.freeze_app_enc,
-    stop_f1_grad=args.freeze_f1
 ).to(device=device)
 
 
@@ -215,6 +198,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         # Premeptively our dataset as we train on a single scene
         self.nerf_data = dset[args.dset_ind]
         SB = args.batch_size
+
         NV, _, H, W = self.nerf_data["images"].shape
         self.nerf_data["images"] = self.nerf_data["images"].unsqueeze(0).expand(SB, NV, 3, H, W)
         self.nerf_data["poses"] = self.nerf_data["poses"].unsqueeze(0).expand(SB, NV, 4, 4)
@@ -227,11 +211,11 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         # If we are, that means we're using a background and patch loss
         if self.app_enc_on:
-            self.appearance_img = dset_app[args.app_ind]["images"].unsqueeze(0).to(device=device)
+            self.appearance_img = dset_app[args.app_set_ind][args.app_ind].unsqueeze(0).to(device=device)
 
             self.patch_dim = args.patch_dim
             self.subpatch_factor = args.subpatch_factor
-            self.ssh_dim = (256, 256) # Original processing resolution of SHH Encoder
+            self.ssh_dim = (224, 224) # Original processing resolution of SHH Encoder
         else:
             self.appearance_img = None
         
@@ -299,6 +283,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         all_rgb_gt = []
         all_rays = []
+        all_radii = []
 
         for obj_idx in range(SB):
             if all_bboxes is not None:
@@ -314,6 +299,9 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             cam_rays = util.gen_rays(
                 poses, W, H, focal, self.z_near, self.z_far, c=c
             )  # (NV, H, W, 8)
+
+            bounding_radius = util.bounding_sphere_radius(cam_rays)
+
             rgb_gt_all = images_0to1
             rgb_gt_all = (
                 rgb_gt_all.permute(0, 2, 3, 1).contiguous().reshape(-1, 3)
@@ -332,13 +320,14 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
             all_rgb_gt.append(rgb_gt)
             all_rays.append(rays)
+            all_radii.append(bounding_radius)
 
         all_rgb_gt = torch.stack(all_rgb_gt)  # (SB, ray_batch_size, 3)
         all_rays = torch.stack(all_rays)  # (SB, ray_batch_size, 8)
 
         all_bboxes = all_poses = all_images = None
 
-        return all_rays, all_rgb_gt
+        return all_rays, all_rgb_gt, all_radii
 
     def patch_rays(self, data):
         if "images" not in data:
@@ -351,6 +340,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         all_rgb_gt = []
         all_rays = []
+        all_radii = []
 
         for obj_idx in range(SB):
             images = all_images[obj_idx]  # (NV, 3, H, W)
@@ -363,7 +353,10 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
             cam_rays = util.gen_rays(
                 poses, W, H, focal, self.z_near, self.z_far, c=c
-            ).permute(0, 3, 1, 2)
+            )
+            bounding_radius = util.bounding_sphere_radius(cam_rays)
+            cam_rays = cam_rays.permute(0, 3, 1, 2)
+
             rgb_gt_all = images_0to1
             rgb_gt_all = (
                 rgb_gt_all.permute(0, 2, 3, 1).contiguous().reshape(-1, 3)
@@ -378,6 +371,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
             all_rgb_gt.append(rgb_gt)
             all_rays.append(rays)
+            all_radii.append(bounding_radius)
 
         all_rgb_gt = torch.stack(all_rgb_gt)  # (SB, ray_batch_size, 3)
         all_rays = torch.stack(all_rays)  # (SB, ray_batch_size, 8)
@@ -388,7 +382,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         all_poses = all_images = None
 
-        return all_rays, all_rgb_gt
+        return all_rays, all_rgb_gt, all_radii
 
     def encode_back_patch(self):
         P = self.patch_dim
@@ -397,12 +391,12 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         self.ref_app_crit.encode_targets(back_patch)
 
     def reg_pass(self, all_rays):
-        return DotMap(render_par(all_rays, want_weights=True, app_pass=False))
+        return DotMap(render_par(all_rays, None, want_weights=True, app_pass=False))
 
-    def app_pass(self, app_imgs, all_rays):
+    def app_pass(self, app_imgs, all_rays, all_radii):
         # Appearance encoder encoding
-        net.app_encoder.encode(app_imgs)
-        render_dict = DotMap(render_par(all_rays, want_weights=True, app_pass=True))
+        net.app_imgs = app_imgs
+        render_dict = DotMap(render_par(all_rays, all_radii, want_weights=True, app_pass=True))
 
         return render_dict
 
@@ -462,9 +456,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         # Establish the views we'll be using to train
         src_images, src_poses = self.choose_views(data)
 
-        # Encode our chosen views
-        self.encode_chosen_views(data, src_images, src_poses)
-
         # Choose our standard randomly-smapled rays for our regular pass
         nerf_rays, nerf_rays_gt = self.rand_rays(data, is_train, global_step)
 
@@ -489,16 +480,13 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         self.encode_chosen_views(data, src_images, src_poses)
 
         # Choose our standard randomly-smapled rays for our regular pass
-        nerf_rays, nerf_rays_gt = self.rand_rays(data, is_train, global_step)
+        nerf_rays, nerf_rays_gt, nerf_radii = self.rand_rays(data, is_train, global_step)
 
         # Render out our scene with our ground truth model
         reg_render_dict = self.reg_pass(nerf_rays)
 
-        # Encode a random patch from the background image
-        self.encode_back_patch()
-
         # Render out our scene using appearance encoding and trainable F2
-        app_render_dict = self.app_pass(app_data, nerf_rays)
+        app_render_dict = self.app_pass(app_data, nerf_rays, nerf_radii)
 
         loss_dict = {}
         
@@ -510,7 +498,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         reg_render_dict = app_render_dict = None
 
         # Choose rays corresponding to an image patch at our disposal
-        patch_rays, _ = self.patch_rays(data)
+        patch_rays, _, patch_radii = self.patch_rays(data)
 
         # Decompose this patch into smaller subpatches
         subpatch_rays = util.decompose_to_subpatches(patch_rays, self.subpatch_factor)
@@ -520,7 +508,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         for i in range(self.subpatch_factor):
             row = []
             for j in range(self.subpatch_factor):
-                row.append(self.app_pass(app_data, subpatch_rays[i][j]))
+                row.append(self.app_pass(app_data, subpatch_rays[i][j], patch_radii))
             subpatch_dicts.append(row)
 
         # Compute our appearance loss using our appearance encoder and these subpatches

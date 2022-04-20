@@ -12,7 +12,7 @@ from torch import nn
 
 class PixelNeRFNet_A(torch.nn.Module):
     # For now, identical to the PixelNeRF
-    def __init__(self, conf, app_enc_on=True, stop_encoder_grad=False, stop_app_encoder_grad=False, stop_f1_grad=False):
+    def __init__(self, conf, app_enc_on=True, stop_encoder_grad=False):
         """
         :param conf PyHocon config subtree 'model'
         """
@@ -71,7 +71,6 @@ class PixelNeRFNet_A(torch.nn.Module):
             conf["mlp_coarse"], 
             d_in, d_latent, 
             d_out=d_out, 
-            stop_f1_grad=stop_f1_grad,
             app_enc_on=app_enc_on
         )
         self.mlp_fine = make_mlp(
@@ -79,8 +78,7 @@ class PixelNeRFNet_A(torch.nn.Module):
             d_in, 
             d_latent, 
             d_out=d_out, 
-            allow_empty=True, 
-            stop_f1_grad=stop_f1_grad,
+            allow_empty=True,
             app_enc_on=app_enc_on
         )
         # Note: this is world -> camera, and bottom row is omitted
@@ -100,8 +98,7 @@ class PixelNeRFNet_A(torch.nn.Module):
         # Appearance encoder additions
         self.app_enc_on = app_enc_on
         if self.app_enc_on:
-            self.stop_app_encoder_grad = stop_app_encoder_grad
-            self.app_encoder = AppearanceEncoder(conf["app_encoder"])
+            self.app_imgs = None
 
     def encode(self, images, poses, focal, z_bounds=None, c=None):
         """
@@ -160,7 +157,7 @@ class PixelNeRFNet_A(torch.nn.Module):
         if self.use_global_encoder:
             self.global_encoder(images)
 
-    def forward(self, xyz, coarse=True, viewdirs=None, app_pass=True, far=False):
+    def forward(self, xyz, rgb_env, coarse=True, viewdirs=None, app_pass=True, far=False):
         """
         Predict (r, g, b, sigma) at world space points xyz.
         Please call encode first!
@@ -251,12 +248,10 @@ class PixelNeRFNet_A(torch.nn.Module):
                 global_latent = repeat_interleave(global_latent, num_repeats)
                 mlp_input = torch.cat((global_latent, mlp_input), dim=-1)
             
-            # Added appearance encoder as input to MLP
-            app_enc = None
-            if self.app_enc_on and app_pass:
-                app_enc = self.app_encoder.app_encoding.to(mlp_input.get_device())
-                if self.stop_app_encoder_grad:
-                    app_enc = app_enc.detach()
+            # Pass encoded RGB to mlp layers
+            if app_pass:
+                rgb_enc = self.code(rgb_env)
+                mlp_input = torch.cat((rgb_enc, mlp_input), dim=-1)
 
             # Camera frustum culling stuff, currently disabled
             combine_index = None
@@ -266,18 +261,18 @@ class PixelNeRFNet_A(torch.nn.Module):
             if coarse or self.mlp_fine is None:
                 mlp_output = self.mlp_coarse(
                     mlp_input,
-                    app_enc,
                     combine_inner_dims=(self.num_views_per_obj, B),
                     combine_index=combine_index,
                     dim_size=dim_size,
+                    app_pass=app_pass
                 )
             else:
                 mlp_output = self.mlp_fine(
                     mlp_input,
-                    app_enc,
                     combine_inner_dims=(self.num_views_per_obj, B),
                     combine_index=combine_index,
                     dim_size=dim_size,
+                    app_pass=app_pass
                 )
 
             # Interpret the output
@@ -326,51 +321,12 @@ class PixelNeRFNet_A(torch.nn.Module):
                     + "If training, unless you are startin a new experiment, please remember to pass --resume."
                 ).format(model_path)
             )
-        
-        # Just load our weights if we're not doing anything with the appearance encoder
-        if not self.app_enc_on:
-            return
 
         # Make a copy of F2 for ground truth evaluation
         if not args.resume:
-            for i in range(self.mlp_fine.combine_layer, self.mlp_fine.n_blocks):
-                app_ind = i - self.mlp_fine.combine_layer
-                self.mlp_coarse.app_blocks[app_ind].load_state_dict(self.mlp_coarse.blocks[i].state_dict())
-                self.mlp_fine.app_blocks[app_ind].load_state_dict(self.mlp_fine.blocks[i].state_dict())
-        
-        # Only load weights for our appearance encoder if we want to
-        if args.load_app_encoder:
-            model_path = "%s/%s/%s" % (args.checkpoints_path, args.name, "app_encoder_init")
-
-            if device is None:
-                device = self.poses.device
-
-            if os.path.exists(model_path):
-                print("Load (Appearance Encoder)", model_path)
-                self.app_encoder.load_state_dict(
-                    torch.load(model_path, map_location=device), strict=True
-                )
-            else:
-                warnings.warn(
-                    (
-                        "WARNING: {} does not exist, not loaded!! Apearance encoder will be re-initialized.\n"
-                        + "If you are trying to load a pretrained appearance encoder for PixelNeRF-A, STOP since it's not in the right place. "
-                    ).format(model_path)
-                )
-        # Otherwise, initialize the weights for the encoder using Kaming Normal initialization
-        # if starting from scratch
-        elif not args.resume:
-            def init_weights(m):
-                if isinstance(m, (nn.Linear, nn.Conv2d)):
-                    nn.init.kaiming_normal_(m.weight)
-                    if m.bias.data is not None:
-                        m.bias.data.zero_()
-                elif isinstance(m, (nn.BatchNorm2d, nn.BatchNorm1d)):
-                    m.weight.data.fill_(1)
-                    if m.bias.data is not None:
-                        m.bias.data.zero_()
-                
-            self.app_encoder.apply(init_weights)
+            for i in range(self.mlp_fine.n_blocks):
+                self.mlp_coarse.app_blocks[i].load_state_dict(self.mlp_coarse.blocks[i].state_dict())
+                self.mlp_fine.app_blocks[i].load_state_dict(self.mlp_fine.blocks[i].state_dict())
         
         return self
 

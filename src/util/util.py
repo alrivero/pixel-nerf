@@ -13,6 +13,7 @@ from random import randint
 from torchvision.transforms.functional_tensor import crop
 from dotmap import DotMap
 from math import pi
+from torch.nn.functional import normalize
 
 def image_float_to_uint8(img):
     """
@@ -622,25 +623,58 @@ def recompose_subpatch_render_dicts_rgb(render_dicts, SB, P, sub_factor):
     
     return patch_coarse_rgb, patch_fine_rgb
 
-def unit_sphere_intersection(rays):
-    cam_pos = rays[:, [0, 1, 2]]
-    cam_dir = rays[:, [3, 4, 5]]
-    cam_pos_dist = torch.norm(cam_pos, p=2, dim=1)
+def bounding_sphere_radius(all_rays):
+    _, H, W, _ = all_rays.shape
+
+    # We take all corners of our viewing planes
+    corner_ul = all_rays[:, 0, 0, :]
+    corner_ur = all_rays[:, H, 0, :]
+    corner_ll = all_rays[:, 0, W, :]
+    corner_lr = all_rays[:, H, W, :]
+    corners = torch.cat([corner_ul, corner_ur, corner_ll, corner_lr])
+
+    # The radius of our bounding sphere, assuming origin (0, 0, 0)
+    corners_z_near = corners[:, :3] + corners[:, 3:6] * corners[:, 7]
+    dist_to_origin = torch.norm(corners_z_near, p=2, dim=1)
+
+    return dist_to_origin.max()
+
+def sphere_intersection(rays, radii):
+    _, B, _ = rays.shape
+    cam_pos = rays[:, :, [0, 1, 2]]
+    cam_dir = rays[:, :, [3, 4, 5]]
+    cam_pos_dist = torch.norm(cam_pos, p=2, dim=2)
 
     # Since our sphere center is at 0, 0, 0, calculations simplify
-    cam_pos_proj_len = (cam_pos * cam_dir).sum(dim=1)
+    cam_pos_proj_len = (cam_pos * cam_dir).sum(dim=2)
     dist_proj_cent = torch.sqrt((cam_pos_dist ** 2) - (cam_pos_proj_len ** 2))
-    dist_intersect = torch.sqrt(1 - (dist_proj_cent ** 2))
 
-    return cam_pos + cam_dir * dist_intersect
+    # # If we're within the sphere, we'll want to compute the closest point
+    # undshoot = -torch.minimum(cam_pos_dist, radius) + radius
+    # cam_pos += normalize(cam_pos) * undshoot
 
-def spherical_intersection_to_map_proj(map, intersections):
-    x = intersections[:, 0]
-    y = intersections[:, 1]
-    z = intersections[:, 2]
-    height, width = map.shape[-2:-1]
+    # # If we're above the sphere, we'll also want to compute the closest point
+    # offshoot = torch.maximum(dist_proj_cent, radius) - radius
+    # cam_pos -= normalize(cam_pos + cam_dir * cam_pos_proj_len) * offshoot
+    # dist_proj_cent = torch.minimum(dist_proj_cent, radius)
 
-    u = width * (torch.atan(torch.sqrt(x + y) / z) % (2 * pi))
-    v = height * (y - 0.5)
+    radii = radii.unsqueeze(1).repeat(1, B)
+    dist_intersect = torch.sqrt((radii ** 2) - (dist_proj_cent ** 2))
+    t = cam_pos_proj_len - dist_intersect
+    t = t.unsqueeze(2).repeat(1, 1, 3)
+
+    return cam_pos + cam_dir * t
+
+def spherical_intersection_to_map_proj(map, intersections, radii):
+    _, B, _ = intersections.shape
+    H, W = map.shape[-2:-1]
+    radii = radii.unsqueeze(1).repeat(1, B)
+
+    x = intersections[:, :, 0]
+    y = intersections[:, :, 1]
+    azimuth = torch.atan2(y, x) + (2.0 * pi) % (2.0 * pi)
+
+    u = W * azimuth
+    v = H * ((y + radii) / (2 * radii))
 
     return torch.cat([u, v], dim=0)

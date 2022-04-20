@@ -19,7 +19,7 @@ class _RenderWrapper(torch.nn.Module):
         self.renderer = renderer
         self.simple_output = simple_output
 
-    def forward(self, rays, want_weights=False, app_pass=True):
+    def forward(self, rays, radii, want_weights=False, app_pass=True):
         if rays.shape[0] == 0:
             return (
                 torch.zeros(0, 3, device=rays.device),
@@ -27,7 +27,7 @@ class _RenderWrapper(torch.nn.Module):
             )
 
         outputs = self.renderer(
-            self.net, rays, want_weights=want_weights and not self.simple_output, app_pass=app_pass
+            self.net, rays, radii, want_weights=want_weights and not self.simple_output, app_pass=app_pass
         )
         if self.simple_output:
             if self.renderer.using_fine:
@@ -95,6 +95,12 @@ class NeRFRenderer(torch.nn.Module):
             "last_sched", torch.tensor(0, dtype=torch.long), persistent=True
         )
 
+    def sample_spherical_rgb(rays, radii, app_imgs):
+        sph_intersects = util.sphere_intersection(rays, radii)
+        uv_env = util.spherical_intersection_to_map_proj(app_imgs, sph_intersects, radii)
+
+        return F.grid_sample(app_imgs, uv_env)
+
     def sample_coarse(self, rays):
         """
         Stratified sampling. Note this is different from original NeRF slightly.
@@ -160,7 +166,7 @@ class NeRFRenderer(torch.nn.Module):
         z_samp = torch.max(torch.min(z_samp, rays[:, -1:]), rays[:, -2:-1])
         return z_samp
 
-    def composite(self, model, rays, z_samp, coarse=True, app_pass=True, sb=0):
+    def composite(self, model, rays, rgb_env, z_samp, coarse=True, app_pass=True, sb=0):
         """
         Render RGB and depth for each ray using NeRF alpha-compositing formula,
         given sampled positions along each ray (see sample_*)
@@ -182,7 +188,7 @@ class NeRFRenderer(torch.nn.Module):
             deltas = torch.cat([deltas, delta_inf], -1)  # (B, K)
 
             # (B, K, 3)
-            points = rays[:, None, :3] + z_samp.unsqueeze(2) * rays[:, None, 3:6]
+            points = rays[:, None, :3] + z_samp.unsqueeze(2) * rays[:, None, 3:6] # origin + sampling along direction
             points = points.reshape(-1, 3)  # (B*K, 3)
 
             use_viewdirs = hasattr(model, "use_viewdirs") and model.use_viewdirs
@@ -199,6 +205,10 @@ class NeRFRenderer(torch.nn.Module):
                 eval_batch_dim = 0
 
             split_points = torch.split(points, eval_batch_size, dim=eval_batch_dim)
+
+            rgb_rep = self.n_coarse if coarse else self.n_fine
+            rgb_env = util.repeat_interleave(rgb_env, rgb_rep, dim=1)
+
             if use_viewdirs:
                 dim1 = K
                 viewdirs = rays[:, None, 3:6].expand(-1, dim1, -1)  # (B, K, 3)
@@ -210,10 +220,10 @@ class NeRFRenderer(torch.nn.Module):
                     viewdirs, eval_batch_size, dim=eval_batch_dim
                 )
                 for pnts, dirs in zip(split_points, split_viewdirs):
-                    val_all.append(model(pnts, coarse=coarse, viewdirs=dirs, app_pass=app_pass))
+                    val_all.append(model(pnts, rgb_env, coarse=coarse, viewdirs=dirs, app_pass=app_pass))
             else:
                 for pnts in split_points:
-                    val_all.append(model(pnts, coarse=coarse, app_pass=app_pass))
+                    val_all.append(model(pnts, rgb_env, coarse=coarse, app_pass=app_pass))
             points = None
             viewdirs = None
             # (B*K, 4) OR (SB, B'*K, 4)
@@ -249,7 +259,7 @@ class NeRFRenderer(torch.nn.Module):
             )
 
     def forward(
-        self, model, rays, app_pass=True, want_weights=False,
+        self, model, rays, radii, app_pass=True, want_weights=False,
     ):
         """
         :model nerf model, should return (SB, B, (r, g, b, sigma))
@@ -270,9 +280,13 @@ class NeRFRenderer(torch.nn.Module):
             superbatch_size = rays.shape[0]
             rays = rays.reshape(-1, 8)  # (SB * B, 8)
 
-            z_coarse = self.sample_coarse(rays)  # (B, Kc)
+            rgb_env = None
+            if radii is not None:
+                rgb_env = self.sample_spherical_rgb(rays, radii, model.app_imgs)
+
+            z_coarse = self.sample_coarse(rays)  # (B, Kc) (SB + B, Kc = B * S?)
             coarse_composite = self.composite(
-                model, rays, z_coarse, coarse=True, app_pass=app_pass, sb=superbatch_size,
+                model, rays, rgb_env, z_coarse, coarse=True, app_pass=app_pass, sb=superbatch_size,
             )
 
             outputs = DotMap(
@@ -294,7 +308,7 @@ class NeRFRenderer(torch.nn.Module):
                 z_combine = torch.cat(all_samps, dim=-1)  # (B, Kc + Kf)
                 z_combine_sorted, argsort = torch.sort(z_combine, dim=-1)
                 fine_composite = self.composite(
-                    model, rays, z_combine_sorted, coarse=False, app_pass=app_pass, sb=superbatch_size,
+                    model, rays, rgb_env, z_combine_sorted, coarse=False, app_pass=app_pass, sb=superbatch_size,
                 )
                 outputs.fine = self._format_outputs(
                     fine_composite, superbatch_size, want_weights=want_weights,

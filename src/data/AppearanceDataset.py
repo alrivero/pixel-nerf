@@ -76,7 +76,7 @@ class AppearanceDataset(torch.utils.data.Dataset):
         return len(self.all_objs)
 
     def __getitem__(self, index):
-        cat, root_dir = self.all_objs[index]
+        _, root_dir = self.all_objs[index]
 
         rgb_paths = [
             x
@@ -85,7 +85,15 @@ class AppearanceDataset(torch.utils.data.Dataset):
         ]
         rgb_paths = sorted(rgb_paths)
         
-        # Get image from this directory
+        # Get images from this directory
+        all_imgs = []
+        for rgb_path in enumerate(rgb_paths):
+            img = imageio.imread(rgb_path)[..., :3]
+            img_tensor = self.image_to_tensor(img)
+
+            all_imgs.append(img_tensor)
+        all_imgs = torch.stack(all_imgs)
+
         img_ind = self.img_ind if self.img_ind < len(rgb_paths) is not None else 0
         img = imageio.imread(rgb_paths[img_ind])[..., :3]
         img_tensor = self.image_to_tensor(img)
@@ -94,14 +102,6 @@ class AppearanceDataset(torch.utils.data.Dataset):
         # Add it later in necessary! (Refer to DVRDataset)
 
         if self.image_size is not None and img_tensor.shape[-2:] != self.image_size:
-            img_tensor = torch.unsqueeze(img_tensor, 0)
             img_tensor = F.interpolate(img_tensor, size=self.image_size, mode="area")
-            img_tensor = torch.squeeze(img_tensor, 0)
-        
-        result = {
-            "path": rgb_paths[img_ind],
-            "img_id": index,
-            "images": img_tensor,
-        }
 
-        return result
+        return img_tensor
