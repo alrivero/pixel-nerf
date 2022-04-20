@@ -278,12 +278,13 @@ class NeRFRenderer(torch.nn.Module):
                 self.n_fine = self.sched[2][self.last_sched.item() - 1]
 
             assert len(rays.shape) == 3
-            superbatch_size = rays.shape[0]
-            rays = rays.reshape(-1, 8)  # (SB * B, 8)
-
             rgb_env = None
             if radii is not None:
                 rgb_env = self.sample_spherical_rgb(rays, radii, model.app_imgs)
+
+            superbatch_size = rays.shape[0]
+            rays = rays.reshape(-1, 8)  # (SB * B, 8)
+
 
             z_coarse = self.sample_coarse(rays)  # (B, Kc) (SB + B, Kc = B * S?)
             coarse_composite = self.composite(
