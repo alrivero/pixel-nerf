@@ -634,7 +634,7 @@ def bounding_sphere_radius(all_rays):
     corners = torch.cat([corner_ul, corner_ur, corner_ll, corner_lr])
 
     # The radius of our bounding sphere, assuming origin (0, 0, 0)
-    corners_z_near = corners[:, :3] + corners[:, 3:6] * corners[:, 7]
+    corners_z_near = corners[:, :3] + corners[:, 3:6] * corners[:, [6]]
     dist_to_origin = torch.norm(corners_z_near, p=2, dim=1)
 
     return dist_to_origin.max()
