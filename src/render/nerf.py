@@ -98,7 +98,23 @@ class NeRFRenderer(torch.nn.Module):
         sph_intersects = util.sphere_intersection(rays, radii)
         uv_env = util.spherical_intersection_to_map_proj(app_imgs, sph_intersects, radii)
 
-        return F.grid_sample(app_imgs, uv_env)
+        # Unfortunate loop needed
+        SB, C, H, W = app_imgs.shape
+        RB = uv_env.shape[1]
+
+        app_imgs = app_imgs.unsqueeze(1)
+        uv_env = uv_env.unsqueeze(2).unsqueeze(2)
+        rgb_env = []
+        for i in range(SB):
+            app_rep = app_imgs[i].expand(RB, C, H, W)
+            uv_rep = uv_env[i]
+
+            rgb = F.grid_sample(app_rep, uv_rep).unsqueeze(0)
+            rgb = rgb.squeeze(-1).squeeze(-1)
+
+            rgb_env.append(rgb)
+
+        return torch.cat(rgb_env)
 
     def sample_coarse(self, rays):
         """
