@@ -5,6 +5,7 @@ import glob
 import imageio
 import random
 from util import get_image_to_tensor_balanced
+from torchvision.transforms import Resize
 
 class AppearanceDataset(torch.utils.data.Dataset):
 
@@ -23,7 +24,6 @@ class AppearanceDataset(torch.utils.data.Dataset):
         max_imgs=100000,
         z_near=1.2,
         z_far=4.0,
-        img_ind=None
     ):
         super().__init__()
         self.base_path = path
@@ -66,11 +66,9 @@ class AppearanceDataset(torch.utils.data.Dataset):
 
         # NOTE: Right now, no intrisic or extrinsic camera information is being used here!
         # Add it later!
-
-        self.image_size = image_size
         self.max_imgs = max_imgs
         self.lindisp = False
-        self.img_ind = img_ind
+        self.resize = Resize(image_size)
     
     def __len__(self):
         return len(self.all_objs)
@@ -89,19 +87,10 @@ class AppearanceDataset(torch.utils.data.Dataset):
         all_imgs = []
         for _, rgb_path in enumerate(rgb_paths):
             img = imageio.imread(rgb_path)[..., :3]
+            img  = self.resize(img)
             img_tensor = self.image_to_tensor(img)
 
             all_imgs.append(img_tensor)
         all_imgs = torch.stack(all_imgs)
 
-        img_ind = self.img_ind if self.img_ind < len(rgb_paths) is not None else 0
-        img = imageio.imread(rgb_paths[img_ind])[..., :3]
-        img_tensor = self.image_to_tensor(img)
-
-        # NOTE: Right now, no intrisic or extrinsic camera information is being used here!
-        # Add it later in necessary! (Refer to DVRDataset)
-
-        if self.image_size is not None and img_tensor.shape[-2:] != self.image_size:
-            img_tensor = F.interpolate(img_tensor, size=self.image_size, mode="area")
-
-        return img_tensor
+        return all_imgs
