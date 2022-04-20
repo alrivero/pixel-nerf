@@ -41,7 +41,6 @@ class _RenderWrapper(torch.nn.Module):
             # Make DotMap to dict to support DataParallel
             return outputs.toDict()
 
-
 class NeRFRenderer(torch.nn.Module):
     """
     NeRF differentiable renderer
@@ -206,8 +205,10 @@ class NeRFRenderer(torch.nn.Module):
 
             split_points = torch.split(points, eval_batch_size, dim=eval_batch_dim)
 
-            rgb_rep = self.n_coarse if coarse else self.n_fine
-            rgb_env = util.repeat_interleave(rgb_env, rgb_rep, dim=1)
+            rgb_env = None
+            if app_pass:
+                rgb_rep = self.n_coarse if coarse else self.n_fine
+                rgb_env = util.repeat_interleave(rgb_env, rgb_rep, dim=1)
 
             if use_viewdirs:
                 dim1 = K
