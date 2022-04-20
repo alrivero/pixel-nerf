@@ -646,7 +646,7 @@ def sphere_intersection(rays, radii):
     cam_pos_dist = torch.norm(cam_pos, p=2, dim=2)
 
     # Since our sphere center is at 0, 0, 0, calculations simplify
-    cam_pos_proj_len = (cam_pos * cam_dir).sum(dim=2)
+    cam_pos_proj_len = torch.abs((cam_pos * cam_dir).sum(dim=2))
     dist_proj_cent = torch.sqrt((cam_pos_dist ** 2) - (cam_pos_proj_len ** 2))
 
     # # If we're within the sphere, we'll want to compute the closest point
