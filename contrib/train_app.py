@@ -138,10 +138,6 @@ if args.app_enc_off:
 else:
     print("Appearance encoder on")
 
-if args.freeze_app_enc:
-    print("Appearance encoder weights frozen")
-    net.app_encoder.eval()
-
 renderer = NeRFRenderer.from_conf(conf["renderer"], lindisp=dset.lindisp,).to(
     device=device
 )
