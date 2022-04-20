@@ -2,10 +2,11 @@ import os
 import torch
 import torch.nn.functional as F
 import glob
-import imageio
 import random
+from PIL import Image
 from util import get_image_to_tensor_balanced
 from torchvision.transforms import Resize
+
 
 class AppearanceDataset(torch.utils.data.Dataset):
 
@@ -86,7 +87,7 @@ class AppearanceDataset(torch.utils.data.Dataset):
         # Get images from this directory
         all_imgs = []
         for _, rgb_path in enumerate(rgb_paths):
-            img = imageio.imread(rgb_path)[..., :3]
+            img = Image.open(rgb_path)
             img_tensor = self.image_to_tensor(img)
             img_tensor  = self.resize(img_tensor)
 
