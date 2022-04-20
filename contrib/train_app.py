@@ -297,7 +297,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 poses, W, H, focal, self.z_near, self.z_far, c=c
             )  # (NV, H, W, 8)
 
-            bounding_radius = util.bounding_sphere_radius(cam_rays)
+            bounding_radius = util.bounding_sphere_radius(cam_rays).unsqueeze(0)
 
             rgb_gt_all = images_0to1
             rgb_gt_all = (
@@ -352,7 +352,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             cam_rays = util.gen_rays(
                 poses, W, H, focal, self.z_near, self.z_far, c=c
             )
-            bounding_radius = util.bounding_sphere_radius(cam_rays)
+            bounding_radius = util.bounding_sphere_radius(cam_rays).unsqueeze(0)
             cam_rays = cam_rays.permute(0, 3, 1, 2)
 
             rgb_gt_all = images_0to1
