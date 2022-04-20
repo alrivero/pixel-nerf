@@ -117,7 +117,7 @@ if (app_size_h is not None and app_size_w is not None):
 
 dset, val_dset, _ = get_split_dataset(args.dataset_format, args.datadir)
 if not args.app_enc_off:
-    dset_app = AppearanceDataset(args.appdir, "train", image_size=app_size, img_ind=args.app_ind)
+    dset_app = AppearanceDataset(args.appdir, "train", image_size=app_size)
 print(
     "dset z_near {}, z_far {}, lindisp {}".format(dset.z_near, dset.z_far, dset.lindisp)
 )
@@ -137,6 +137,7 @@ if args.app_enc_off:
     print("Appearance encoder OFF (training normally)")
 else:
     print("Appearance encoder on")
+
 
 renderer = NeRFRenderer.from_conf(conf["renderer"], lindisp=dset.lindisp,).to(
     device=device
