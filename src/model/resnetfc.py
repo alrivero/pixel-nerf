@@ -221,8 +221,6 @@ class ResnetFC_App(ResnetFC):
         """
         super().__init__(d_in, d_out, n_blocks, d_latent, d_hidden, beta, combine_layer, combine_type, use_spade)
 
-        self.stop_f1_grad = stop_f1_grad
-
         self.app_enc_on = app_enc_on
         if self.app_enc_on:
             size_in = self.blocks[0].size_in + app_in
