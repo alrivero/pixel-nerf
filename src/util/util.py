@@ -628,9 +628,9 @@ def bounding_sphere_radius(all_rays):
 
     # We take all corners of our viewing planes
     corner_ul = all_rays[:, 0, 0, :]
-    corner_ur = all_rays[:, H, 0, :]
-    corner_ll = all_rays[:, 0, W, :]
-    corner_lr = all_rays[:, H, W, :]
+    corner_ur = all_rays[:, H - 1, 0, :]
+    corner_ll = all_rays[:, 0, W - 1, :]
+    corner_lr = all_rays[:, H - 1, W - 1, :]
     corners = torch.cat([corner_ul, corner_ur, corner_ll, corner_lr])
 
     # The radius of our bounding sphere, assuming origin (0, 0, 0)
