@@ -215,6 +215,12 @@ class PixelNeRFNet_A(torch.nn.Module):
 
                 mlp_input = z_feature
 
+            # Pass encoded RGB to mlp layers
+            if app_pass:
+                rgb_env = repeat_interleave(rgb_env, NS)
+                rgb_enc = self.code(rgb_env)
+                mlp_input = torch.cat((rgb_enc, mlp_input), dim=-1)
+            
             if self.use_encoder:
                 # Grab encoder's latent code.
                 uv = -xyz[:, :, :2] / xyz[:, :, 2:]  # (SB, B, 2)
@@ -247,12 +253,6 @@ class PixelNeRFNet_A(torch.nn.Module):
                 num_repeats = mlp_input.shape[0] // global_latent.shape[0]
                 global_latent = repeat_interleave(global_latent, num_repeats)
                 mlp_input = torch.cat((global_latent, mlp_input), dim=-1)
-            
-            # Pass encoded RGB to mlp layers
-            if app_pass:
-                rgb_env = repeat_interleave(rgb_env, NS)
-                rgb_enc = self.code(rgb_env)
-                mlp_input = torch.cat((rgb_enc, mlp_input), dim=-1)
 
             # Camera frustum culling stuff, currently disabled
             combine_index = None
