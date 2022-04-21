@@ -223,9 +223,12 @@ class ResnetFC_App(ResnetFC):
 
         self.app_enc_on = app_enc_on
         if self.app_enc_on:
-            size_in = self.blocks[0].size_in + app_in
-            size_out = self.blocks[0].size_in
-            self.app_trans_block = ResnetBlockFC(size_in, size_out=size_out, size_h=size_in, beta=beta)
+            self.app_in = app_in
+
+            self.lin_in_app = nn.Linear(d_in + app_in, d_hidden)
+            nn.init.constant_(self.lin_in.bias, 0.0)
+            nn.init.kaiming_normal_(self.lin_in.weight, a=0, mode="fan_in")
+
             self.app_blocks = nn.ModuleList(
                 [ResnetBlockFC(d_hidden, beta=beta) for _ in range(self.n_blocks)]
             )
@@ -239,23 +242,22 @@ class ResnetFC_App(ResnetFC):
         on dim 1, at combine_layer
         """
         with profiler.record_function("resnetfc_infer"):
-            assert zx.size(-1) == self.d_latent + self.d_in
+            if app_pass:
+                assert zx.size(-1) == self.d_latent + self.d_in + self.app_in
+            else:
+                assert zx.size(-1) == self.d_latent + self.d_in
+
             if self.d_latent > 0:
                 z = zx[..., : self.d_latent]
                 x = zx[..., self.d_latent :]
             else:
                 x = zx
             if self.d_in > 0:
-                x = self.lin_in(x)
+                x = self.lin_in_app(x) if app_pass else self.lin_in(x)
             else:
                 x = torch.zeros(self.d_hidden, device=zx.device)
 
-            if app_pass:
-                x = self.app_trans_block(x)
-                blocks = self.app_blocks
-            else:
-                blocks = self.blocks
-
+            blocks = self.app_blocks if app_pass else self.blocks
             for blkid in range(self.n_blocks):
                 if blkid == self.combine_layer:
                     x = util.combine_interleaved(
