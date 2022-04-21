@@ -275,11 +275,11 @@ class NeRFRenderer(torch.nn.Module):
                 self.n_fine = self.sched[2][self.last_sched.item() - 1]
 
             assert len(rays.shape) == 3
-            assert len(rgb_env.shape) == 3
 
             superbatch_size = rays.shape[0]
             rays = rays.reshape(-1, 8)  # (SB * B, 8)
             if rgb_env is not None:
+                assert len(rgb_env.shape) == 3
                 rgb_env.reshape(-1, 3)
 
 
