@@ -6,7 +6,6 @@ https://github.com/kwea123/nerf_pl
 """
 import torch
 import torch.nn.functional as F
-from src.util.util import repeat_interleave
 import util
 import torch.autograd.profiler as profiler
 from torch.nn import DataParallel
@@ -201,9 +200,8 @@ class NeRFRenderer(torch.nn.Module):
             split_points = torch.split(points, eval_batch_size, dim=eval_batch_dim)
 
             if app_pass:
-                rgb_env = repeat_interleave(rgb_env, K)
                 rgb_rep = self.n_coarse if coarse else self.n_fine
-                rgb_env = util.repeat_interleave(rgb_env, rgb_rep, dim=1)
+                rgb_env = util.repeat_interleave(rgb_env, rgb_rep)
 
             if use_viewdirs:
                 dim1 = K
