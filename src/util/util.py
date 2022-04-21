@@ -659,7 +659,7 @@ def bounding_sphere_radius(all_rays):
 
     return dist_to_origin.max()
 
-def sample_spherical_rgb(self, rays, radii, app_imgs):
+def sample_spherical_rgb(rays, radii, app_imgs):
     sph_intersects = sphere_intersection(rays, radii)
     uv_env = spherical_intersection_to_map_proj(app_imgs, sph_intersects, radii)
     rgb_env = uv_to_rgb(app_imgs, uv_env)
