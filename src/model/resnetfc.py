@@ -225,7 +225,7 @@ class ResnetFC_App(ResnetFC):
         if self.app_enc_on:
             size_in = self.blocks[0].size_in + app_in
             size_out = self.blocks[0].size_in
-            self.app_trans_block = ResnetBlockFC(size_in, size_out, size_out, beta)
+            self.app_trans_block = ResnetBlockFC(size_in, size_out=size_out, size_h=size_in, beta=beta)
             self.app_blocks = nn.ModuleList(
                 [ResnetBlockFC(d_hidden, beta=beta) for _ in range(self.n_blocks)]
             )
