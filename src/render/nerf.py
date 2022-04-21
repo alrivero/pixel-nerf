@@ -6,7 +6,7 @@ https://github.com/kwea123/nerf_pl
 """
 import torch
 import torch.nn.functional as F
-from pixel_nerf.src.util.util import repeat_interleave
+from src.util.util import repeat_interleave
 import util
 import torch.autograd.profiler as profiler
 from torch.nn import DataParallel
