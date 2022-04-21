@@ -185,8 +185,6 @@ class NeRFRenderer(torch.nn.Module):
             points = rays[:, None, :3] + z_samp.unsqueeze(2) * rays[:, None, 3:6] # origin + sampling along direction
             points = points.reshape(-1, 3)  # (B*K, 3)
 
-            rgb_env = repeat_interleave(rgb_env, K)
-
             use_viewdirs = hasattr(model, "use_viewdirs") and model.use_viewdirs
 
             val_all = []
@@ -202,8 +200,8 @@ class NeRFRenderer(torch.nn.Module):
 
             split_points = torch.split(points, eval_batch_size, dim=eval_batch_dim)
 
-            rgb_env = None
             if app_pass:
+                rgb_env = repeat_interleave(rgb_env, K)
                 rgb_rep = self.n_coarse if coarse else self.n_fine
                 rgb_env = util.repeat_interleave(rgb_env, rgb_rep, dim=1)
 
