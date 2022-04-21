@@ -4,6 +4,7 @@ References:
 https://github.com/bmild/nerf
 https://github.com/kwea123/nerf_pl
 """
+import pdb
 import torch
 import torch.nn.functional as F
 from pixel_nerf.src.util.util import repeat_interleave
@@ -95,7 +96,7 @@ class NeRFRenderer(torch.nn.Module):
             "last_sched", torch.tensor(0, dtype=torch.long), persistent=True
         )
 
-    def sample_coarse(self, rays):
+        def sample_coarse(self, rays):
         """
         Stratified sampling. Note this is different from original NeRF slightly.
         :param rays ray [origins (3), directions (3), near (1), far (1)] (B, 8)
