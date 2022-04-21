@@ -95,7 +95,6 @@ class ReferenceColorLoss(torch.nn.Module):
     def __init__(self, conf, encoder_dir=None):
         super().__init__()
         self.ref_encoder = StyleEncoder(4, 3, 32, 512, norm="BN", activ="relu", pad_type='reflect')
-        self.ref_encoder.eval()
         if conf.get_bool("pretrained", True) and encoder_dir is not None:
             self.ref_encoder.load_state_dict(torch.load(encoder_dir))
             print("using reference color loss with pretrained weights")
@@ -105,24 +104,16 @@ class ReferenceColorLoss(torch.nn.Module):
         for param in self.ref_encoder.parameters():
             param.requires_grad = False
         
-        self.target_app_encodings = None
         self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.ref_loss = torch.torch.nn.MSELoss()
     
-    def encode_targets(self, imgs):
-        self.target_app_encodings = self.ref_encoder(imgs)
-        self.target_app_encodings = self.avg_pool(self.target_app_encodings)
-        self.target_app_encodings = self.target_app_encodings.detach()
-    
-    def forward(self, outputs):
+    def forward(self, ref_patch, outputs):
         outputs_encodings = self.ref_encoder(outputs)
         outputs_encodings = self.avg_pool(outputs_encodings)
+        patch_encodings = self.ref_encoder(ref_patch)
+        patch_encodings = self.avg_pool(patch_encodings)
 
-        out_views = outputs_encodings.shape[0]
-        tar_views = self.target_app_encodings.shape[0]
-        targets_encodings = repeat_interleave(self.target_app_encodings, out_views // tar_views)
-
-        return self.ref_loss(outputs_encodings, targets_encodings)
+        return self.ref_loss(patch_encodings, outputs_encodings)
 
 
 def get_rgb_loss(conf, coarse=True, using_bg=False, reduction="mean"):

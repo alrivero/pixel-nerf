@@ -553,14 +553,14 @@ def get_random_patch(t, Hp, Wp):
     return crop(t, i, j, Hp, Wp)
 
 def decompose_to_subpatches(patch, sub_factor):
-    SB = patch.shape[0]
+    SB, _, C, _, _ = patch.shape
     HWp = patch.shape[-1] // sub_factor
 
     subpatches = []
     for i in range(sub_factor):
         row = []
         for j in range(sub_factor):
-            row.append(crop(patch, HWp * i, HWp * j, HWp, HWp).permute(0, 1, 3, 4, 2).reshape(SB, -1, 8))
+            row.append(crop(patch, HWp * i, HWp * j, HWp, HWp).permute(0, 1, 3, 4, 2).reshape(SB, -1, C))
         subpatches.append(row)
     
     return subpatches
@@ -594,6 +594,26 @@ def recompose_subpatch_render_dicts_depth(render_dicts, SB, P, sub_factor):
         ])
     
     return patch_coarse_depth, patch_fine_depth
+
+def recompose_subpatch_rgb_env(subpatch_rgb_env, SB, P, sub_factor):
+    HWp = P // sub_factor
+    row = []
+
+    for j in range(len(subpatch_rgb_env[0])):
+        row.append(subpatch_rgb_env[0][j].permute(0, 2, 1).reshape(SB, 3, HWp, HWp))
+
+    out = torch.cat(row, dim=3)
+    
+    for i in range(1, len(subpatch_rgb_env)):
+        row = []
+        for j in range(len(subpatch_rgb_env[i])):
+            row.append(subpatch_rgb_env[i][j].permute(0, 2, 1).reshape(SB, 3, HWp, HWp))
+
+        out = torch.cat(
+            [out, torch.cat(row, dim=3)],
+            dim=2)
+    
+    return out
 
 def recompose_subpatch_render_dicts_rgb(render_dicts, SB, P, sub_factor):
     HWp = P // sub_factor
@@ -639,6 +659,12 @@ def bounding_sphere_radius(all_rays):
 
     return dist_to_origin.max()
 
+def sample_spherical_rgb(self, rays, radii, app_imgs):
+    sph_intersects = sphere_intersection(rays, radii)
+    uv_env = spherical_intersection_to_map_proj(app_imgs, sph_intersects, radii)
+    rgb_env = uv_to_rgb(app_imgs, uv_env)
+    return rgb_env
+
 def sphere_intersection(rays, radii):
     _, B, _ = rays.shape
     cam_pos = rays[:, :, [0, 1, 2]]
@@ -679,3 +705,22 @@ def spherical_intersection_to_map_proj(map, intersections, radii):
     uv = torch.cat([u, v], dim=2)
 
     return torch.cat([u, v], dim=2)
+
+def uv_to_rgb(app_imgs, uv_env):
+    # Unfortunate loop needed
+    SB, C, H, W = app_imgs.shape
+    RB = uv_env.shape[1]
+
+    app_imgs = app_imgs.unsqueeze(1)
+    uv_env = uv_env.unsqueeze(2).unsqueeze(2)
+    rgb_env = []
+    for i in range(SB):
+        app_rep = app_imgs[i].expand(RB, C, H, W)
+        uv_rep = uv_env[i]
+
+        rgb = F.grid_sample(app_rep, uv_rep).unsqueeze(0)
+        rgb = rgb.squeeze(-1).squeeze(-1)
+
+        rgb_env.append(rgb)
+
+    return torch.cat(rgb_env)

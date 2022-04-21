@@ -6,6 +6,7 @@ https://github.com/kwea123/nerf_pl
 """
 import torch
 import torch.nn.functional as F
+from pixel_nerf.src.util.util import repeat_interleave
 import util
 import torch.autograd.profiler as profiler
 from torch.nn import DataParallel
@@ -93,28 +94,6 @@ class NeRFRenderer(torch.nn.Module):
         self.register_buffer(
             "last_sched", torch.tensor(0, dtype=torch.long), persistent=True
         )
-
-    def sample_spherical_rgb(self, rays, radii, app_imgs):
-        sph_intersects = util.sphere_intersection(rays, radii)
-        uv_env = util.spherical_intersection_to_map_proj(app_imgs, sph_intersects, radii)
-
-        # Unfortunate loop needed
-        SB, C, H, W = app_imgs.shape
-        RB = uv_env.shape[1]
-
-        app_imgs = app_imgs.unsqueeze(1)
-        uv_env = uv_env.unsqueeze(2).unsqueeze(2)
-        rgb_env = []
-        for i in range(SB):
-            app_rep = app_imgs[i].expand(RB, C, H, W)
-            uv_rep = uv_env[i]
-
-            rgb = F.grid_sample(app_rep, uv_rep).unsqueeze(0)
-            rgb = rgb.squeeze(-1).squeeze(-1)
-
-            rgb_env.append(rgb)
-
-        return torch.cat(rgb_env)
 
     def sample_coarse(self, rays):
         """
@@ -206,6 +185,8 @@ class NeRFRenderer(torch.nn.Module):
             points = rays[:, None, :3] + z_samp.unsqueeze(2) * rays[:, None, 3:6] # origin + sampling along direction
             points = points.reshape(-1, 3)  # (B*K, 3)
 
+            rgb_env = repeat_interleave(rgb_env, K)
+
             use_viewdirs = hasattr(model, "use_viewdirs") and model.use_viewdirs
 
             val_all = []
@@ -276,7 +257,7 @@ class NeRFRenderer(torch.nn.Module):
             )
 
     def forward(
-        self, model, rays, radii, app_pass=True, want_weights=False,
+        self, model, rays, rgb_env, app_pass=True, want_weights=False,
     ):
         """
         :model nerf model, should return (SB, B, (r, g, b, sigma))
@@ -294,12 +275,12 @@ class NeRFRenderer(torch.nn.Module):
                 self.n_fine = self.sched[2][self.last_sched.item() - 1]
 
             assert len(rays.shape) == 3
-            rgb_env = None
-            if radii is not None:
-                rgb_env = self.sample_spherical_rgb(rays, radii, model.app_imgs)
+            assert len(rgb_env.shape) == 3
 
             superbatch_size = rays.shape[0]
             rays = rays.reshape(-1, 8)  # (SB * B, 8)
+            if rgb_env is not None:
+                rgb_env.reshape(-1, 3)
 
 
             z_coarse = self.sample_coarse(rays)  # (B, Kc) (SB + B, Kc = B * S?)
