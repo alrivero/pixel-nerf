@@ -215,7 +215,7 @@ class PixelNeRFNet_A(torch.nn.Module):
 
                 mlp_input = z_feature
 
-            # Pass encoded RGB to mlp layers
+            # Pass encoded RGB to mlp layers (currently assuming mlp_input is not None)
             if app_pass:
                 rgb_env = repeat_interleave(rgb_env, NS)
                 rgb_enc = self.code(rgb_env)
@@ -244,7 +244,7 @@ class PixelNeRFNet_A(torch.nn.Module):
                     # z_feature not needed
                     mlp_input = latent
                 else:
-                    mlp_input = torch.cat((latent, z_feature), dim=-1)
+                    mlp_input = torch.cat((latent, mlp_input), dim=-1)
 
             if self.use_global_encoder:
                 # Concat global latent code if enabled
