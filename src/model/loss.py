@@ -109,9 +109,7 @@ class ReferenceColorLoss(torch.nn.Module):
     
     def forward(self, ref_patch, outputs):
         outputs_encodings = self.ref_encoder(outputs)
-        outputs_encodings = self.avg_pool(outputs_encodings)
         patch_encodings = self.ref_encoder(ref_patch)
-        patch_encodings = self.avg_pool(patch_encodings)
 
         return self.ref_loss(patch_encodings, outputs_encodings)
 
