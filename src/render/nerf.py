@@ -200,8 +200,7 @@ class NeRFRenderer(torch.nn.Module):
             split_points = torch.split(points, eval_batch_size, dim=eval_batch_dim)
 
             if app_pass:
-                rgb_rep = self.n_coarse if coarse else self.n_fine
-                rgb_env = util.repeat_interleave(rgb_env, rgb_rep)
+                rgb_env = util.repeat_interleave(rgb_env, K)
 
             if use_viewdirs:
                 dim1 = K
