@@ -515,8 +515,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         
 
         # Compute our appearance loss using our appearance encoder and these subpatches
-        patch_rgb_env = util.sample_spherical_rgb(patch_rays, patch_radii, app_data)
-        app_loss = self.app_loss(src_images, subpatch_dicts, patch_rgb_env, loss_dict)
+        app_loss = self.app_loss(src_images, subpatch_dicts, subpatch_rgb_env, loss_dict)
 
         # Compute our standard NeRF loss
         loss = nerf_loss + depth_loss + app_loss
