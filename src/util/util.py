@@ -693,14 +693,14 @@ def sphere_intersection(rays, radii):
 
 def spherical_intersection_to_map_proj(map, intersections, radii):
     _, B, _ = intersections.shape
-    H, W = map.shape[-3:-1]
+    H, W = map.shape[2:4]
     radii = radii.expand(1, B)
 
     x = intersections[:, :, 0]
     y = intersections[:, :, 1]
     azimuth = (torch.atan2(y, x) + (2.0 * pi)) % (2.0 * pi)
 
-    u = (W * (azimuth / 2 * pi)).long()
+    u = (W * (azimuth / (2 * pi))).long()
     v = (H * (y + radii) / (2 * radii)).long()
 
     return u, v
