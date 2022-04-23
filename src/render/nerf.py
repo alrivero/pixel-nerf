@@ -274,8 +274,7 @@ class NeRFRenderer(torch.nn.Module):
             superbatch_size = rays.shape[0]
             rays = rays.reshape(-1, 8)  # (SB * B, 8)
             if rgb_env is not None:
-                assert len(rgb_env.shape) == 3
-                rgb_env = rgb_env.reshape(-1, 3)
+                assert len(rgb_env.shape) == 2
 
 
             z_coarse = self.sample_coarse(rays)  # (B, Kc) (SB + B, Kc = B * S?)

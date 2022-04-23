@@ -700,27 +700,17 @@ def spherical_intersection_to_map_proj(map, intersections, radii):
     y = intersections[:, :, [1]]
     azimuth = (torch.atan2(y, x) + (2.0 * pi)) % (2.0 * pi)
 
-    u = (azimuth / pi) - 1.0
-    v = y / radii
-    uv = torch.cat([u, v], dim=2)
+    u = (W * (azimuth / 2 * pi)).int()
+    v = (H * (y + radii) / (2 * radii)).int()
 
-    return torch.cat([u, v], dim=2)
+    return u, v
 
 def uv_to_rgb(app_imgs, uv_env):
-    # Unfortunate loop needed
     SB, C, H, W = app_imgs.shape
-    RB = uv_env.shape[1]
+    B = u.shape[1]
 
-    app_imgs = app_imgs.unsqueeze(1)
-    uv_env = uv_env.unsqueeze(2).unsqueeze(2)
-    rgb_env = []
-    for i in range(SB):
-        app_rep = app_imgs[i].expand(RB, C, H, W)
-        uv_rep = uv_env[i]
+    u, v = uv_env
+    t = torch.arange(SB)
+    t = repeat_interleave(t, B)
 
-        rgb = F.grid_sample(app_rep, uv_rep).unsqueeze(0)
-        rgb = rgb.squeeze(-1).squeeze(-1)
-
-        rgb_env.append(rgb)
-
-    return torch.cat(rgb_env)
+    return app_imgs[t, v, u]
