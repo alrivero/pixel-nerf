@@ -716,4 +716,4 @@ def uv_to_rgb(app_imgs, uv_env):
     u = u.reshape(-1)
     v = v.reshape(-1)
 
-    return app_imgs[t, v, u]
+    return app_imgs.permute(0, 2, 3, 1)[t, v, u]
