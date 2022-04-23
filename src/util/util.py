@@ -706,10 +706,10 @@ def spherical_intersection_to_map_proj(map, intersections, radii):
     return u, v
 
 def uv_to_rgb(app_imgs, uv_env):
-    SB, C, H, W = app_imgs.shape
+    u, v = uv_env
+    SB = app_imgs.shape[0]
     B = u.shape[1]
 
-    u, v = uv_env
     t = torch.arange(SB)
     t = repeat_interleave(t, B)
 
