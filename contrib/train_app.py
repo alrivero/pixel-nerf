@@ -535,7 +535,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         renderer.train()
         return losses
 
-    def vis_step(self, data, global_step, idx=None):
+    def vis_step(self, data, app_data, global_step, idx=None):
         if "images" not in data:
             return {}
         if idx is None:
@@ -553,6 +553,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         cam_rays = util.gen_rays(
             poses, W, H, focal, self.z_near, self.z_far, c=c
         )  # (NV, H, W, 8)
+        
         images_0to1 = images * 0.5 + 0.5  # (NV, 3, H, W)
 
         curr_nviews = nviews[torch.randint(0, len(nviews), (1,)).item()]
@@ -582,8 +583,10 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 focal.to(device=device),
                 c=c.to(device=device) if c is not None else None,
             )
+            bounding_radius = util.bounding_sphere_radius(test_rays.unsqueeze(0)).unsqueeze(0)
+            rgb_env = util.sample_spherical_rgb(test_rays.unsqueeze(0), bounding_radius, app_data)
             test_rays = test_rays.reshape(1, H * W, -1)
-            render_dict = DotMap(render_par(test_rays, want_weights=True))
+            render_dict = self.app_pass(test_rays, rgb_env)
             coarse = render_dict.coarse
             fine = render_dict.fine
 
@@ -710,7 +713,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                     self.net.eval()
                     with torch.no_grad():
                         vis, vis_vals = self.vis_step(
-                            self.nerf_data, global_step=step_id
+                            self.nerf_data, self.appearance_img, global_step=step_id
                         )
                     if vis_vals is not None:
                         self.writer.add_scalars(
