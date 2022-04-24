@@ -1,6 +1,6 @@
 # Training to a set of multiple objects (e.g. ShapeNet or DTU)
 # tensorboard logs available in logs/<expname>
-
+import debug
 import imp
 import sys
 import os
@@ -544,8 +544,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             print(idx)
             batch_idx = idx
         images = data["images"][batch_idx].to(device=device)  # (NV, 3, H, W)
-        if self.app_enc_on:
-            app_images = self.appearance_img
         poses = data["poses"][batch_idx].to(device=device)  # (NV, 4, 4)
         focal = data["focal"][batch_idx : batch_idx + 1]  # (1)
         c = data.get("c")
@@ -584,8 +582,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 focal.to(device=device),
                 c=c.to(device=device) if c is not None else None,
             )
-            if self.app_enc_on:
-                net.app_encoder.encode(app_images)
             test_rays = test_rays.reshape(1, H * W, -1)
             render_dict = DotMap(render_par(test_rays, want_weights=True))
             coarse = render_dict.coarse
@@ -618,12 +614,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             alpha_coarse_cmap,
         ]
 
-        if self.app_enc_on:
-            app_images_0to1 = app_images * 0.5 + 0.5  # (NV, 3, H, W)
-            Wa = app_images.shape[-1]
-            app_gt = app_images_0to1[batch_idx].permute(1, 2, 0).cpu().numpy().reshape(H, Wa, 3)
-            vis_list.append(app_gt)
-
         vis_coarse = np.hstack(vis_list)
         vis = vis_coarse
 
@@ -643,9 +633,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 rgb_fine_np,
                 alpha_fine_cmap,
             ]
-
-            if self.app_enc_on:
-                vis_list.append(app_gt)
 
             vis_fine = np.hstack(vis_list)
             vis = np.vstack((vis_coarse, vis_fine))
