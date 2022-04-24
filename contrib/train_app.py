@@ -584,8 +584,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 c=c.to(device=device) if c is not None else None,
             )
             bounding_radius = util.bounding_sphere_radius(test_rays.unsqueeze(0)).unsqueeze(0)
-            rgb_env = util.sample_spherical_rgb(test_rays.unsqueeze(0), bounding_radius, app_data)
             test_rays = test_rays.reshape(1, H * W, -1)
+            rgb_env = util.sample_spherical_rgb(test_rays, bounding_radius, app_data)
             render_dict = self.app_pass(test_rays, rgb_env)
             coarse = render_dict.coarse
             fine = render_dict.fine
