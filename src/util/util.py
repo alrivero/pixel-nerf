@@ -600,14 +600,14 @@ def recompose_subpatch_rgb_env(subpatch_rgb_env, SB, P, sub_factor):
     row = []
 
     for j in range(len(subpatch_rgb_env[0])):
-        row.append(subpatch_rgb_env[0][j].permute(0, 2, 1).reshape(SB, 3, HWp, HWp))
+        row.append(subpatch_rgb_env[0][j].permute(1, 0).reshape(SB, 3, HWp, HWp))
 
     out = torch.cat(row, dim=3)
     
     for i in range(1, len(subpatch_rgb_env)):
         row = []
         for j in range(len(subpatch_rgb_env[i])):
-            row.append(subpatch_rgb_env[i][j].permute(0, 2, 1).reshape(SB, 3, HWp, HWp))
+            row.append(subpatch_rgb_env[i][j].permute(1, 0).reshape(SB, 3, HWp, HWp))
 
         out = torch.cat(
             [out, torch.cat(row, dim=3)],
