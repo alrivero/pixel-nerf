@@ -324,7 +324,7 @@ class PixelNeRFNet_A(torch.nn.Module):
                 ).format(model_path)
             )
 
-        # Make a copy of F2 for ground truth evaluation
+        # Make a copy of model for ground truth eval
         if not args.resume and not args.app_enc_off:
             for i in range(self.mlp_fine.n_blocks):
                 self.mlp_coarse.app_blocks[i].load_state_dict(self.mlp_coarse.blocks[i].state_dict())

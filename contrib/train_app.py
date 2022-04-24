@@ -592,6 +592,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 rgb_env = util.sample_spherical_rgb(test_rays, bounding_radius, app_data)
                 render_dict = self.app_pass(test_rays, rgb_env)
             else:
+                test_rays = test_rays.reshape(1, H * W, -1)
                 render_dict = self.reg_pass(test_rays)
             coarse = render_dict.coarse
             fine = render_dict.fine
