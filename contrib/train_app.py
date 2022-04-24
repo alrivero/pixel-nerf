@@ -586,10 +586,13 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 focal.to(device=device),
                 c=c.to(device=device) if c is not None else None,
             )
-            bounding_radius = util.bounding_sphere_radius(test_rays.unsqueeze(0)).unsqueeze(0)
-            test_rays = test_rays.reshape(1, H * W, -1)
-            rgb_env = util.sample_spherical_rgb(test_rays, bounding_radius, app_data)
-            render_dict = self.app_pass(test_rays, rgb_env)
+            if self.app_enc_on:
+                bounding_radius = util.bounding_sphere_radius(test_rays.unsqueeze(0)).unsqueeze(0)
+                test_rays = test_rays.reshape(1, H * W, -1)
+                rgb_env = util.sample_spherical_rgb(test_rays, bounding_radius, app_data)
+                render_dict = self.app_pass(test_rays, rgb_env)
+            else:
+                render_dict = self.reg_pass(test_rays)
             coarse = render_dict.coarse
             fine = render_dict.fine
 
