@@ -224,10 +224,10 @@ class NeRFRenderer(torch.nn.Module):
 
             if len(in_data) == 1:
                 for pnts in split_points:
-                    val_all.append(model(pnts, rgb_env, coarse=coarse, app_pass=app_pass))
+                    val_all.append(model(pnts, None, coarse=coarse, app_pass=app_pass))
             elif len(in_data) == 2:
                 for pnts, dirs in zip(split_points, split_viewdirs):
-                    val_all.append(model(pnts, rgb_e, coarse=coarse, viewdirs=dirs, app_pass=app_pass))
+                    val_all.append(model(pnts, None, coarse=coarse, viewdirs=dirs, app_pass=app_pass))
             elif len(in_data) == 3:
                 for pnts, rgb_e, dirs in zip(split_points, split_rgb_env, split_viewdirs):
                     val_all.append(model(pnts, rgb_e, coarse=coarse, viewdirs=dirs, app_pass=app_pass))
