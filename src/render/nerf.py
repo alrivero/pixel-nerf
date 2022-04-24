@@ -199,9 +199,16 @@ class NeRFRenderer(torch.nn.Module):
 
             split_points = torch.split(points, eval_batch_size, dim=eval_batch_dim)
 
+            in_data = [split_points]
             if app_pass:
                 rgb_env = util.repeat_interleave(rgb_env, K)
+                if sb > 0:
+                    rgb_env = rgb_env.reshape(
+                        sb, -1, 3
+                    )  # (SB, B'*K, 3) B' is real ray batch size
 
+                split_rgb_env = torch.split(rgb_env, eval_batch_size, dim=eval_batch_dim)
+                in_data.append(split_rgb_env)
             if use_viewdirs:
                 dim1 = K
                 viewdirs = rays[:, None, 3:6].expand(-1, dim1, -1)  # (B, K, 3)
@@ -212,11 +219,19 @@ class NeRFRenderer(torch.nn.Module):
                 split_viewdirs = torch.split(
                     viewdirs, eval_batch_size, dim=eval_batch_dim
                 )
-                for pnts, dirs in zip(split_points, split_viewdirs):
-                    val_all.append(model(pnts, rgb_env, coarse=coarse, viewdirs=dirs, app_pass=app_pass))
-            else:
+
+                in_data.append(split_viewdirs)
+
+            if len(in_data) == 1:
                 for pnts in split_points:
                     val_all.append(model(pnts, rgb_env, coarse=coarse, app_pass=app_pass))
+            elif len(in_data) == 2:
+                for pnts, dirs in zip(split_points, split_viewdirs):
+                    val_all.append(model(pnts, rgb_e, coarse=coarse, viewdirs=dirs, app_pass=app_pass))
+            elif len(in_data) == 3:
+                for pnts, rgb_e, dirs in zip(split_points, split_rgb_env, split_viewdirs):
+                    val_all.append(model(pnts, rgb_e, coarse=coarse, viewdirs=dirs, app_pass=app_pass))
+
             points = None
             viewdirs = None
             # (B*K, 4) OR (SB, B'*K, 4)
