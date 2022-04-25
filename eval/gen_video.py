@@ -63,13 +63,10 @@ def extra_args(parser):
         "--appdir", "-DA", type=str, default=None, help="Appearance Dataset directory"
     )
     parser.add_argument(
-        "--app_ind", "-IA", type=int, default=0, help="Index of image to be used for appearance harmonization"
+        "--app_set_ind", "-IA", type=int, default=0, help="Index of image to be used for appearance harmonization"
     )
     parser.add_argument(
-        "--load_app_encoder",
-        action="store_true",
-        default=None,
-        help="Load an appearance encoder's weights",
+        "--app_ind", "-IM", type=int, default=0, help="Index of image to be used for appearance harmonization"
     )
     return parser
 
@@ -137,7 +134,7 @@ print("Generating rays")
 dtu_format = hasattr(dset, "sub_format") and dset.sub_format == "dtu"
 
 dset_app = AppearanceDataset(args.appdir, "train", image_size=None, img_ind=args.app_ind)
-app_imgs = dset_app[args.app_ind]["images"].unsqueeze(0).to(device=device)
+app_imgs = dset_app[args.app_set_ind][args.app_ind].unsqueeze(0).to(device=device)
 
 if dtu_format:
     print("Using DTU camera trajectory")
@@ -204,6 +201,8 @@ render_rays = util.gen_rays(
 ).to(device=device)
 # (NV, H, W, 8)
 
+bounding_radius = util.bounding_sphere_radius(render_rays).unsqueeze(0)
+
 focal = focal.to(device=device)
 
 source = torch.tensor(list(map(int, args.source.split())), dtype=torch.long)
@@ -223,7 +222,6 @@ with torch.no_grad():
     else:
         src_view = source
     
-    net.app_encoder.encode(app_imgs)
     net.encode(
         images[src_view].unsqueeze(0),
         poses[src_view].unsqueeze(0).to(device=device),
@@ -236,7 +234,8 @@ with torch.no_grad():
     for rays in tqdm.tqdm(
         torch.split(render_rays.view(-1, 8), args.ray_batch_size, dim=0)
     ):
-        rgb, _depth = render_par(rays[None])
+        rgb_env = util.sample_spherical_rgb(rays[None], bounding_radius, app_imgs)
+        rgb, _depth = render_par(rays[None], rgb_env)
         all_rgb_fine.append(rgb[0])
     _depth = None
     rgb_fine = torch.cat(all_rgb_fine)
