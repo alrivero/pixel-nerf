@@ -689,7 +689,8 @@ def spherical_intersection_to_map_proj(map, intersections, radii):
 
     x = intersections[:, :, 0]
     y = intersections[:, :, 1]
-    azimuth = (torch.atan2(y, x) + (2.0 * pi)) % (2.0 * pi)
+    z = intersections[:, :, 2]
+    azimuth = (torch.atan2(z, x) + (2.0 * pi)) % (2.0 * pi)
 
     u = (W * (azimuth / (2 * pi))).long()
     v = (H * (y + radii) / (2 * radii)).long()
