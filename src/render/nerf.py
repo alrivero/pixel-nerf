@@ -201,6 +201,7 @@ class NeRFRenderer(torch.nn.Module):
 
             in_data = [split_points]
             if app_pass:
+                rgb_env = rgb_env.reshape(-1, 3)
                 rgb_env = util.repeat_interleave(rgb_env, K)
                 if sb > 0:
                     rgb_env = rgb_env.reshape(
@@ -289,7 +290,7 @@ class NeRFRenderer(torch.nn.Module):
             superbatch_size = rays.shape[0]
             rays = rays.reshape(-1, 8)  # (SB * B, 8)
             if rgb_env is not None:
-                assert len(rgb_env.shape) == 2
+                assert len(rgb_env.shape) == 3
 
 
             z_coarse = self.sample_coarse(rays)  # (B, Kc) (SB + B, Kc = B * S?)
