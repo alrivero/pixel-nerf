@@ -705,7 +705,7 @@ def uv_to_rgb(app_imgs, uv_env):
     t = torch.arange(SB)
     t = repeat_interleave(t, B)
 
-    u = u.flatten()
-    v = v.flatten()
+    u = u.reshape(-1)
+    v = v.reshape(-1)
 
     return app_imgs.permute(0, 2, 3, 1)[t, v, u].reshape(SB, B, 3)
