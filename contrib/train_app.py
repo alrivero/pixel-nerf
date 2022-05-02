@@ -95,7 +95,7 @@ def extra_args(parser):
         "--patch_dim", "-P", type=int, default=128, help="The H and W dimension of image patches (power of 2)"
     )
     parser.add_argument(
-        "patch_batch_size", "-PB", type=int, default=1, help="How many batches to use to decompose our patches"
+        "--patch_batch_size", "-PB", type=int, default=1, help="How many batches to use to decompose our patches"
     )
     parser.add_argument(
         "--vis_step_off",
