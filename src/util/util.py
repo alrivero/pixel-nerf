@@ -661,7 +661,7 @@ def bounding_sphere_radius(all_rays):
 
 def sample_spherical_rgb(rays, radii, app_imgs, patch_size):
     sph_intersects = sphere_intersection(rays, radii)
-    uv_env = spherical_intersection_to_map_proj(app_imgs, sph_intersects, radii)
+    uv_env = spherical_intersection_to_map_proj(app_imgs, sph_intersects, radii, patch_size)
     rgb_env = uv_to_rgb_patches(app_imgs, uv_env, patch_size)
     return rgb_env
 
