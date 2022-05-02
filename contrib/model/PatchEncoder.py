@@ -4,6 +4,8 @@ from .unet_tile_se_norm import Conv2dBlock, SELayer
 
 class PatchEncoder(nn.Module):
     def __init__(self, conf):
+        super(PatchEncoder, self).__init__()
+
         n_downsample = conf.get_int("n_downsample", 2)
         input_dim = conf.get_int("input_dim", 3)
         out_dim = conf.get_int("out_dim", 32)
