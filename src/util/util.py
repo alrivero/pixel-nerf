@@ -659,11 +659,10 @@ def bounding_sphere_radius(all_rays):
 
     return dist_to_origin.max()
 
-def sample_spherical_rgb(rays, radii, app_imgs, patch_size):
+def sample_spherical_uv(rays, radii, app_imgs, patch_size):
     sph_intersects = sphere_intersection(rays, radii)
     uv_env = spherical_intersection_to_map_proj(app_imgs, sph_intersects, radii, patch_size)
-    rgb_env = uv_to_rgb_patches(app_imgs, uv_env, patch_size)
-    return rgb_env
+    return uv_env
 
 def sphere_intersection(rays, radii):
     _, B, _ = rays.shape
@@ -699,9 +698,6 @@ def spherical_intersection_to_map_proj(map, intersections, radii, patch_size):
     u = (W * (azimuth / (2 * pi))).long()
     v = (H * (y + radii) / (2 * radii)).long()
 
-    u += patch_size // 2
-    v += patch_size // 2
-
     return u, v
 
 def uv_to_rgb_patches(app_imgs, uv_env, patch_size):
@@ -709,28 +705,33 @@ def uv_to_rgb_patches(app_imgs, uv_env, patch_size):
     SB = app_imgs.shape[0]
     B = u.shape[1]
 
-    # Assuming our patch size is an odd dim square
-    offset = patch_size // 2
-    u_left = u - offset
-    u_right = u + offset + 1
-    v_left = v - offset
-    v_right = v + offset + 1
-
-    u_min = u_left.min(dim=1)[0].flatten()
-    v_min = v_left.min(dim=1)[0].flatten()
-    u_max = u_right.max(dim=1)[0].flatten()
-    v_max = v_right.max(dim=1)[0].flatten()
-
     t = torch.arange(SB)
-    harm_patches = app_imgs[t, :, u_min:u_max, v_min:v_max]
-
-    u_left = u_left.flatten()
-    u_right = u_right.flatten()
-    v_left = v_left.flatten()
-    v_right = v_right.flatten()
     t = repeat_interleave(t, B)
 
-    pixel_patches = app_imgs[t, :, u_left:u_right, v_left:v_right]
-    pixel_patches = pixel_patches.reshape(SB, B, 3, patch_size, patch_size)
+    u = u.flatten()
+    v = v.flatten()
 
-    return pixel_patches, harm_patches
+    stride = 1
+    app_imgs = app_imgs.unfold(2, patch_size, stride).unfold(3, patch_size, stride)
+
+    return app_imgs[t, :, u, v, :, :]
+
+def uv_to_rgb_harm_patches(app_imgs, uv_env, patch_size):
+    u, v = uv_env
+    SB = app_imgs.shape[0]
+    B = u.shape[1]
+
+    offset = patch_size // 2
+
+    u_min = u.min(dim=1)[0].flatten() - offset
+    v_min = v.min(dim=1)[0].flatten()
+    u_max = (u + offset).max(dim=1)[0].flatten()
+    v_max = (v + offset).max(dim=1)[0].flatten()
+
+    # Since SB is really low, this is ok
+    out = []
+    for i in range(SB):
+        out.append(app_imgs[i, :, v_min[i]:v_max[i], u_min[i]:u_max[i]])
+
+    return out
+

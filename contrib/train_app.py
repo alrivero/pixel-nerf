@@ -427,7 +427,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         
         return density_app_loss
 
-    def app_loss(self, src_images, patch_dicts, harm_patch, loss_dict):
+    def app_loss(self, src_images, patch_dicts, harm_patches, loss_dict):
         SB, _, D, H, W = src_images.shape
         P = self.patch_dim
 
@@ -443,12 +443,12 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         coarse_app_rgb = util.ssh_normalization(coarse_app_rgb)
         coarse_app_rgb = F.interpolate(coarse_app_rgb, size=self.ssh_dim, mode="area")
-        ref_app_loss = self.ref_app_crit(coarse_app_rgb, harm_patch) * self.lambda_ref_coarse
+        ref_app_loss = self.ref_app_crit(coarse_app_rgb, harm_patches) * self.lambda_ref_coarse
         loss_dict["rec"] = ref_app_loss.item()
 
         fine_app_rgb = util.ssh_normalization(fine_app_rgb)
         fine_app_rgb = F.interpolate(fine_app_rgb, size=self.ssh_dim, mode="area")
-        ref_app_loss_fine = self.ref_app_crit(fine_app_rgb, harm_patch) * self.lambda_ref_fine
+        ref_app_loss_fine = self.ref_app_crit(fine_app_rgb, harm_patches) * self.lambda_ref_fine
         ref_app_loss += ref_app_loss_fine
         loss_dict["ref"] = ref_app_loss.item()
 
@@ -486,7 +486,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         # Choose our standard randomly-smapled rays for our regular pass
         nerf_rays, nerf_rays_gt, nerf_radii = self.rand_rays(data, is_train, global_step)
-        _, nerf_rgb_env = util.sample_spherical_rgb(nerf_rays, nerf_radii, app_data, self.patch_dim)
+        nerf_uv_env = util.sample_spherical_uv(nerf_rays, nerf_radii, app_data, self.patch_dim)
+        nerf_rgb_env = util.uv_to_rgb_patches(app_data, nerf_uv_env, self.patch_dim)
 
         # Render out our scene with our ground truth model
         reg_render_dict = self.reg_pass(nerf_rays)
@@ -505,7 +506,9 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         # Choose rays corresponding to an image patch at our disposal
         patch_rays, _, patch_radii = self.patch_rays(data)
-        harm_patches, app_rgb_env = util.sample_spherical_rgb(patch_rays, patch_radii, app_data, self.patch_dim)
+        patch_uv_env = util.sample_spherical_uv(patch_rays, patch_radii, app_data, self.patch_dim)
+        patch_rgb_env = util.uv_to_rgb_patches(app_data, patch_uv_env, self.patch_dim)
+        harm_patches = util.uv_to_rgb_harm_patches(app_data, patch_uv_env, self.patch_dim)
 
         # These are a lot of rays. Decompose them into render batches and render
         B = patch_rays.shape[1]
@@ -517,7 +520,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             b_end = (i + 1) * batch_step
 
             batch_rays = patch_rays[:, b_start:b_end, :]
-            batch_rgb_env = app_rgb_env[:, b_start:b_end, :, :, :]
+            batch_rgb_env = patch_rgb_env[:, b_start:b_end, :, :, :]
             patch_render_out.append(self.app_pass(batch_rays, batch_rgb_env))
 
         # Compute our appearance loss using our appearance encoder and these subpatches

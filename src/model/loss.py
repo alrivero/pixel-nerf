@@ -107,11 +107,19 @@ class ReferenceColorLoss(torch.nn.Module):
         self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.ref_loss = torch.torch.nn.MSELoss()
     
-    def forward(self, ref_patch, outputs):
+    def forward(self, outputs, harm_patches):
+        # Our outputs are all P x P patches, but the harmonized patches might not be (?)
         outputs_encodings = self.ref_encoder(outputs)
-        patch_encodings = self.ref_encoder(ref_patch)
+        outputs_encodings = self.avg_pool(outputs_encodings)
 
-        return self.ref_loss(patch_encodings, outputs_encodings)
+        loss = torch.zeros(1)
+        for i in range(len(harm_patches)):
+            harm_encoding = self.ref_encoder(harm_patches[i])
+            harm_encoding = self.avg_pool(harm_encoding)
+            
+            loss += self.ref_loss(outputs_encodings[i], harm_encoding[0])
+
+        return loss
 
 
 def get_rgb_loss(conf, coarse=True, using_bg=False, reduction="mean"):
