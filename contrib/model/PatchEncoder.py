@@ -10,7 +10,7 @@ class PatchEncoder(nn.Module):
         activ = conf.get_string("activ", "relu")
 
         inter_dim = out_dim // 2 ** n_downsample
-        self.init_layer = Conv2dBlock(input_dim, inter_dim, 7, 1, activ=activ)
+        self.init_layer = Conv2dBlock(input_dim, inter_dim, 7, 1, activation=activ)
 
         self.down_layers = []
         for _ in range(n_downsample):
