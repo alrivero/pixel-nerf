@@ -15,7 +15,7 @@ class PatchEncoder(nn.Module):
         self.down_layers = []
         for _ in range(n_downsample):
             inter_dim *= 2
-            self.down_layers.append(Conv2dBlock(input_dim, inter_dim, 3, 1, activ=activ))
+            self.down_layers.append(Conv2dBlock(input_dim, inter_dim, 3, 1, activation=activ))
         self.down_layers = nn.Sequential(*self.down_layers)
 
         self.se_layer = SELayer(inter_dim)
