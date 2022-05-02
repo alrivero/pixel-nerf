@@ -201,12 +201,13 @@ class NeRFRenderer(torch.nn.Module):
 
             in_data = [split_points]
             if app_pass:
-                rgb_env = rgb_env.reshape(-1, 3)
+                _, _, C, Hp, Wp = rgb_env.shape
+                rgb_env = rgb_env.reshape(-1, C, Hp, Wp)
                 rgb_env = util.repeat_interleave(rgb_env, K)
                 if sb > 0:
                     rgb_env = rgb_env.reshape(
-                        sb, -1, 3
-                    )  # (SB, B'*K, 3) B' is real ray batch size
+                        sb, -1, C, Hp, Wp
+                    )
 
                 split_rgb_env = torch.split(rgb_env, eval_batch_size, dim=eval_batch_dim)
                 in_data.append(split_rgb_env)
@@ -290,7 +291,7 @@ class NeRFRenderer(torch.nn.Module):
             superbatch_size = rays.shape[0]
             rays = rays.reshape(-1, 8)  # (SB * B, 8)
             if rgb_env is not None:
-                assert len(rgb_env.shape) == 3
+                assert len(rgb_env.shape) == 5
 
 
             z_coarse = self.sample_coarse(rays)  # (B, Kc) (SB + B, Kc = B * S?)

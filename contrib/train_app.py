@@ -95,7 +95,7 @@ def extra_args(parser):
         "--patch_dim", "-P", type=int, default=128, help="The H and W dimension of image patches (power of 2)"
     )
     parser.add_argument(
-        "--subpatch_factor", "-PS", type=int, default=1, help="patch_dim / subpatch_factor * 2 = subpatches rendered and composed (power of 2)"
+        "patch_batch_size", "-PB", type=int, default=1, help="How many batches to use to decompose our patches"
     )
     parser.add_argument(
         "--vis_step_off",
@@ -211,7 +211,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             self.appearance_img = dset_app[args.app_set_ind][args.app_ind].unsqueeze(0).to(device=device)
 
             self.patch_dim = args.patch_dim
-            self.subpatch_factor = args.subpatch_factor
+            self.patch_batch_size = args.patch_batch_size
             self.ssh_dim = (224, 224) # Original processing resolution of SHH Encoder
         else:
             self.appearance_img = None
@@ -427,23 +427,28 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         
         return density_app_loss
 
-    def app_loss(self, src_images, subpatch_dicts, patch_rgb_env, loss_dict):
+    def app_loss(self, src_images, patch_dicts, harm_patch, loss_dict):
         SB, _, D, H, W = src_images.shape
         P = self.patch_dim
 
-        # Going to assume fine network is here. If its an issue, change later.
-        coarse_app_rgb, fine_app_rgb = util.recompose_subpatch_render_dicts_rgb(subpatch_dicts, SB, P, self.subpatch_factor)
-        patch_rgb_env = util.recompose_subpatch_rgb_env(patch_rgb_env, SB, P, self.subpatch_factor)
-        patch_rgb_env = F.interpolate(patch_rgb_env, size=self.ssh_dim, mode="area")
+        # Recompose our coarse and fine output. Going to assume fine is used. If an issue, change.
+        coarse_app_rgb = []
+        fine_app_rgb = []
+        for render_dict in patch_dicts:
+            coarse_app_rgb.append(render_dict.coarse.rgb.permute(0, 2, 1))
+            fine_app_rgb.append(render_dict.fine.rgb.permute(0, 2, 1))
 
-        app_rgb_coarse = util.ssh_normalization(coarse_app_rgb)
-        app_rgb_coarse = F.interpolate(app_rgb_coarse, size=self.ssh_dim, mode="area")
-        ref_app_loss = self.ref_app_crit(app_rgb_coarse, patch_rgb_env) * self.lambda_ref_coarse
+        coarse_app_rgb = torch.cat(coarse_app_rgb, dim=-1).reshape(SB, 3, P, P)
+        fine_app_rgb = torch.cat(fine_app_rgb, dim=-1).reshape(SB, 3, P, P)
+
+        coarse_app_rgb = util.ssh_normalization(coarse_app_rgb)
+        coarse_app_rgb = F.interpolate(coarse_app_rgb, size=self.ssh_dim, mode="area")
+        ref_app_loss = self.ref_app_crit(coarse_app_rgb, harm_patch) * self.lambda_ref_coarse
         loss_dict["rec"] = ref_app_loss.item()
 
-        app_rgb_fine = util.ssh_normalization(fine_app_rgb)
-        app_rgb_fine = F.interpolate(app_rgb_fine, size=self.ssh_dim, mode="area")
-        ref_app_loss_fine = self.ref_app_crit(app_rgb_fine, patch_rgb_env) * self.lambda_ref_fine
+        fine_app_rgb = util.ssh_normalization(fine_app_rgb)
+        fine_app_rgb = F.interpolate(fine_app_rgb, size=self.ssh_dim, mode="area")
+        ref_app_loss_fine = self.ref_app_crit(fine_app_rgb, harm_patch) * self.lambda_ref_fine
         ref_app_loss += ref_app_loss_fine
         loss_dict["ref"] = ref_app_loss.item()
 
@@ -481,7 +486,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         # Choose our standard randomly-smapled rays for our regular pass
         nerf_rays, nerf_rays_gt, nerf_radii = self.rand_rays(data, is_train, global_step)
-        nerf_rgb_env = util.sample_spherical_rgb(nerf_rays, nerf_radii, app_data)
+        _, nerf_rgb_env = util.sample_spherical_rgb(nerf_rays, nerf_radii, app_data, self.patch_dim)
 
         # Render out our scene with our ground truth model
         reg_render_dict = self.reg_pass(nerf_rays)
@@ -500,26 +505,23 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         # Choose rays corresponding to an image patch at our disposal
         patch_rays, _, patch_radii = self.patch_rays(data)
+        harm_patches, app_rgb_env = util.sample_spherical_rgb(patch_rays, patch_radii, app_data, self.patch_dim)
 
-        # Decompose this patch into smaller subpatches
-        subpatch_rays = util.decompose_to_subpatches(patch_rays, self.subpatch_factor)
+        # These are a lot of rays. Decompose them into render batches and render
+        B = patch_rays.shape[1]
+        batch_step = B // self.patch_batch_size
 
-        # Render out these subpatches
-        subpatch_dicts = []
-        subpatch_rgb_env = []
-        for i in range(self.subpatch_factor):
-            row_app = []
-            row_rgb = []
-            for j in range(self.subpatch_factor):
-                sub_rgb_env = util.sample_spherical_rgb(subpatch_rays[i][j], patch_radii, app_data)
-                row_app.append(self.app_pass(subpatch_rays[i][j], sub_rgb_env))
-                row_rgb.append(sub_rgb_env)
-            subpatch_dicts.append(row_app)
-            subpatch_rgb_env.append(row_rgb)
-        
+        patch_render_out = []
+        for i in range(self.patch_batch_size):
+            b_start = i * batch_step
+            b_end = (i + 1) * batch_step
+
+            batch_rays = patch_rays[:, b_start:b_end, :]
+            batch_rgb_env = app_rgb_env[:, b_start:b_end, :, :, :]
+            patch_render_out.append(self.app_pass(batch_rays, batch_rgb_env))
 
         # Compute our appearance loss using our appearance encoder and these subpatches
-        app_loss = self.app_loss(src_images, subpatch_dicts, subpatch_rgb_env, loss_dict)
+        app_loss = self.app_loss(src_images, patch_render_out, harm_patches, loss_dict)
 
         # Compute our standard NeRF loss
         loss = nerf_loss + depth_loss + app_loss

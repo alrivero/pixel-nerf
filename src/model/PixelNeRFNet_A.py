@@ -5,7 +5,7 @@ import warnings
 from .model_util import make_encoder, make_mlp
 from .encoder import ImageEncoder
 from .code import PositionalEncoding
-from contrib.model.AppearanceEncoder import AppearanceEncoder
+from contrib.model.PatchEncoder import PatchEncoder
 import torch.autograd.profiler as profiler
 from util import repeat_interleave
 from torch import nn
@@ -98,7 +98,7 @@ class PixelNeRFNet_A(torch.nn.Module):
         # Appearance encoder additions
         self.app_enc_on = app_enc_on
         if self.app_enc_on:
-            self.app_imgs = None
+            self.patch_encoder = PatchEncoder(conf["patch_encoder"])
 
     def encode(self, images, poses, focal, z_bounds=None, c=None):
         """
@@ -168,7 +168,7 @@ class PixelNeRFNet_A(torch.nn.Module):
         :return (SB, B, 4) r g b sigma
         """
         with profiler.record_function("model_inference"):
-            SB, B, _ = xyz.shape
+            SB, B, C, Hp, Wp = rgb_env.shape
             NS = self.num_views_per_obj
 
             # Transform query points into the camera spaces of the input views
@@ -217,10 +217,13 @@ class PixelNeRFNet_A(torch.nn.Module):
 
             # Pass encoded RGB to mlp layers (currently assuming mlp_input is not None)
             if app_pass:
+                rgb_env = rgb_env.reshape(SB * B, C, Hp, Wp)
+                rgb_env = self.patch_encoder(rgb_env)
+                rgb_env = rgb_env.reshape(SB, B, -1)
                 rgb_env = repeat_interleave(rgb_env, NS)
-                rgb_env = rgb_env.reshape(-1, 3)
-                rgb_enc = self.code(rgb_env)
-                mlp_input = torch.cat((rgb_enc, mlp_input), dim=-1)
+                rgb_env = rgb_env.reshape(SB * B * NS, -1)
+
+                mlp_input = torch.cat((rgb_env, mlp_input), dim=-1)
             
             if self.use_encoder:
                 # Grab encoder's latent code.
@@ -324,11 +327,18 @@ class PixelNeRFNet_A(torch.nn.Module):
                 ).format(model_path)
             )
 
-        # Make a copy of model for ground truth eval
+        # Make a copy of model for ground truth eval (Starting from an existing PixelNeRF model)
         if not args.resume and not args.app_enc_off:
             for i in range(self.mlp_fine.n_blocks):
                 self.mlp_coarse.app_blocks[i].load_state_dict(self.mlp_coarse.blocks[i].state_dict())
                 self.mlp_fine.app_blocks[i].load_state_dict(self.mlp_fine.blocks[i].state_dict())
+
+            # Intialize our patch encoder
+            def init_weights(m):
+                if isinstance(m, nn.Linear):
+                    torch.nn.init.xavier_uniform(m.weight)
+                    nn.init.constant_(m.bias, 0.0)
+            self.patch_encoder.apply(init_weights)
         
         return self
 

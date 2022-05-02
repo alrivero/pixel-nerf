@@ -11,7 +11,7 @@ import math
 import warnings
 from random import randint
 from torchvision.transforms.functional_tensor import crop
-from dotmap import DotMap
+# from dotmap import DotMap
 from math import pi
 from torch.nn.functional import normalize
 
@@ -659,10 +659,10 @@ def bounding_sphere_radius(all_rays):
 
     return dist_to_origin.max()
 
-def sample_spherical_rgb(rays, radii, app_imgs):
+def sample_spherical_rgb(rays, radii, app_imgs, patch_size):
     sph_intersects = sphere_intersection(rays, radii)
     uv_env = spherical_intersection_to_map_proj(app_imgs, sph_intersects, radii)
-    rgb_env = uv_to_rgb(app_imgs, uv_env)
+    rgb_env = uv_to_rgb_patches(app_imgs, uv_env, patch_size)
     return rgb_env
 
 def sphere_intersection(rays, radii):
@@ -682,10 +682,14 @@ def sphere_intersection(rays, radii):
 
     return cam_pos + cam_dir * t
 
-def spherical_intersection_to_map_proj(map, intersections, radii):
+def spherical_intersection_to_map_proj(map, intersections, radii, patch_size):
     _, B, _ = intersections.shape
     H, W = map.shape[2:4]
     radii = radii.expand(1, B)
+
+    # Assuming an odd patch size
+    H -= patch_size - 1
+    W -= patch_size - 1
 
     x = intersections[:, :, 0]
     y = intersections[:, :, 1]
@@ -695,17 +699,38 @@ def spherical_intersection_to_map_proj(map, intersections, radii):
     u = (W * (azimuth / (2 * pi))).long()
     v = (H * (y + radii) / (2 * radii)).long()
 
+    u += patch_size // 2
+    v += patch_size // 2
+
     return u, v
 
-def uv_to_rgb(app_imgs, uv_env):
+def uv_to_rgb_patches(app_imgs, uv_env, patch_size):
     u, v = uv_env
     SB = app_imgs.shape[0]
     B = u.shape[1]
 
+    # Assuming our patch size is an odd dim square
+    offset = patch_size // 2
+    u_left = u - offset
+    u_right = u + offset + 1
+    v_left = v - offset
+    v_right = v + offset + 1
+
+    u_min = u_left.min(dim=1)[0].flatten()
+    v_min = v_left.min(dim=1)[0].flatten()
+    u_max = u_right.max(dim=1)[0].flatten()
+    v_max = v_right.max(dim=1)[0].flatten()
+
     t = torch.arange(SB)
+    harm_patches = app_imgs[t, :, u_min:u_max, v_min:v_max]
+
+    u_left = u_left.flatten()
+    u_right = u_right.flatten()
+    v_left = v_left.flatten()
+    v_right = v_right.flatten()
     t = repeat_interleave(t, B)
 
-    u = u.reshape(-1)
-    v = v.reshape(-1)
+    pixel_patches = app_imgs[t, :, u_left:u_right, v_left:v_right]
+    pixel_patches = pixel_patches.reshape(SB, B, 3, patch_size, patch_size)
 
-    return app_imgs.permute(0, 2, 3, 1)[t, v, u].reshape(SB, B, 3)
+    return pixel_patches, harm_patches
