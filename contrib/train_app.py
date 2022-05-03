@@ -513,11 +513,14 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         # These are a lot of rays. Decompose them into render batches and render
         B = patch_rays.shape[1]
         batch_step = B // self.patch_batch_size
+        remaining = B % batch_step
 
         patch_render_out = []
         for i in range(self.patch_batch_size):
             b_start = i * batch_step
             b_end = (i + 1) * batch_step
+            if i == (self.patch_batch_size - 1):
+                b_end += remaining
 
             batch_rays = patch_rays[:, b_start:b_end, :]
             batch_rgb_env = patch_rgb_env[:, b_start:b_end, :, :, :]
