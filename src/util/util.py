@@ -702,8 +702,9 @@ def spherical_intersection_to_map_proj(map, intersections, radii, patch_size):
 
 def uv_to_rgb_patches(app_imgs, uv_env, patch_size):
     u, v = uv_env
-    SB = app_imgs.shape[0]
+    SB, C, _, _ = app_imgs.shape
     B = u.shape[1]
+    P = patch_size
 
     t = torch.arange(SB)
     t = repeat_interleave(t, B)
@@ -711,10 +712,9 @@ def uv_to_rgb_patches(app_imgs, uv_env, patch_size):
     u = u.flatten()
     v = v.flatten()
 
-    stride = 1
-    app_imgs = app_imgs.unfold(2, patch_size, stride).unfold(3, patch_size, stride)
+    app_imgs = app_imgs.unfold(2, P, 1).unfold(3, P, 1)
 
-    return app_imgs[t, :, v, u, :, :]
+    return app_imgs[t, :, v, u, :, :].reshape(SB, B, C, P, P)
 
 def uv_to_rgb_harm_patches(app_imgs, uv_env, patch_size):
     u, v = uv_env
@@ -723,7 +723,7 @@ def uv_to_rgb_harm_patches(app_imgs, uv_env, patch_size):
 
     offset = patch_size // 2
 
-    u_min = u.min(dim=1)[0].flatten() - offset
+    u_min = u.min(dim=1)[0].flatten()
     v_min = v.min(dim=1)[0].flatten()
     u_max = (u + offset).max(dim=1)[0].flatten()
     v_max = (v + offset).max(dim=1)[0].flatten()
