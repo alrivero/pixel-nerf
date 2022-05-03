@@ -168,7 +168,7 @@ class PixelNeRFNet_A(torch.nn.Module):
         :return (SB, B, 4) r g b sigma
         """
         with profiler.record_function("model_inference"):
-            SB, B, C, Hp, Wp = rgb_env.shape
+            SB, B, _ = xyz.shape
             NS = self.num_views_per_obj
 
             # Transform query points into the camera spaces of the input views
@@ -217,6 +217,7 @@ class PixelNeRFNet_A(torch.nn.Module):
 
             # Pass encoded RGB to mlp layers (currently assuming mlp_input is not None)
             if app_pass:
+                _, _, C, Hp, Wp = rgb_env.shape
                 rgb_env = rgb_env.reshape(SB * B, C, Hp, Wp)
                 rgb_env = self.patch_encoder(rgb_env)
                 rgb_env = rgb_env.reshape(SB, B, -1)
