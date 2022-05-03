@@ -1,6 +1,6 @@
 # Training to a set of multiple objects (e.g. ShapeNet or DTU)
 # tensorboard logs available in logs/<expname>
-# import debug
+import debug
 import imp
 import sys
 import os
