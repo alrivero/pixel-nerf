@@ -725,8 +725,8 @@ def uv_to_rgb_harm_patches(app_imgs, uv_env, patch_size):
 
     u_min = u.min(dim=1)[0].flatten()
     v_min = v.min(dim=1)[0].flatten()
-    u_max = (u + offset).max(dim=1)[0].flatten()
-    v_max = (v + offset).max(dim=1)[0].flatten()
+    u_max = (u + patch_size).max(dim=1)[0].flatten()
+    v_max = (v + patch_size).max(dim=1)[0].flatten()
 
     # Since SB is really low, this is ok
     out = []
