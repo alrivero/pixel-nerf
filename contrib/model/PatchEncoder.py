@@ -23,7 +23,7 @@ class PatchEncoder(nn.Module):
         self.se_layer = SELayer(inter_dim)
         self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
     
-    def encode(self, patches):
+    def forward(self, patches):
         x = self.init_layer(patches)
         x = self.down_layers(x)
 
