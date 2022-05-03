@@ -112,7 +112,7 @@ class ReferenceColorLoss(torch.nn.Module):
         outputs_encodings = self.ref_encoder(outputs)
         outputs_encodings = self.avg_pool(outputs_encodings)
 
-        loss = torch.zeros(1)
+        loss = torch.zeros(1).to(device=outputs.get_device())
         for i in range(len(harm_patches)):
             harm_encoding = self.ref_encoder(harm_patches[i].unsqueeze(0))
             harm_encoding = self.avg_pool(harm_encoding)
