@@ -336,7 +336,7 @@ class PixelNeRFNet_A(torch.nn.Module):
             # Intialize our patch encoder
             def init_weights(m):
                 if isinstance(m, nn.Linear):
-                    torch.nn.init.xavier_uniform(m.weight)
+                    torch.nn.init.xavier_uniform_(m.weight)
                     nn.init.constant_(m.bias, 0.0)
             self.patch_encoder.apply(init_weights)
         
