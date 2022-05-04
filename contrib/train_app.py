@@ -445,7 +445,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         fine_app_rgb = torch.cat(fine_app_rgb, dim=-1).reshape(SB, 3, P, P)
         fine_app_rgb = F.interpolate(fine_app_rgb, size=self.ssh_dim, mode="area")
 
-        for i in len(harm_patches):
+        for i in range(len(harm_patches)):
             _, Hh, Wh = harm_patches[i].shape
 
             Hh = int(224 * (Hh / P))
