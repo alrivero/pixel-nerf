@@ -217,7 +217,6 @@ class PixelNeRFNet_A(torch.nn.Module):
 
             # Pass encoded RGB to mlp layers (currently assuming mlp_input is not None)
             if app_pass:
-                _, _, C, Hp, Wp = rgb_env.shape
                 rgb_env = rgb_env.reshape(SB, B, -1)
                 rgb_env = repeat_interleave(rgb_env, NS)
                 rgb_env = rgb_env.reshape(SB * B * NS, -1)
