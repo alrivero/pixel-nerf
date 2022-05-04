@@ -110,12 +110,10 @@ class ReferenceColorLoss(torch.nn.Module):
     def forward(self, outputs, harm_patches):
         # Our outputs are all P x P patches, but the harmonized patches might not be (?)
         outputs_encodings = self.ref_encoder(outputs)
-        outputs_encodings = self.avg_pool(outputs_encodings)
 
         loss = torch.zeros(1).to(device=outputs.get_device())
         for i in range(len(harm_patches)):
             harm_encoding = self.ref_encoder(harm_patches[i])
-            harm_encoding = self.avg_pool(harm_encoding)
             
             loss += self.ref_loss(outputs_encodings[i], harm_encoding[0])
 
