@@ -487,7 +487,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         # Choose our standard randomly-smapled rays for our regular pass
         nerf_rays, nerf_rays_gt, nerf_radii = self.rand_rays(data, is_train, global_step)
-        SB, B, _ = nerf_rays.shape[0]
+        SB, B, _ = nerf_rays.shape
 
         nerf_uv_env = util.sample_spherical_uv(nerf_rays, nerf_radii, app_data, self.patch_dim)
         nerf_rgb_env = util.uv_to_rgb_patches(app_data, nerf_uv_env, self.patch_dim)
