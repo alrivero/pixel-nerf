@@ -450,7 +450,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
             Hh = int(224 * (Hh / P))
             Wh = int(224 * (Wh / P))
-            harm_patches[i] = F.interpolate(harm_patches[i], size=(Hh, Wh), mode="area")
+            harm_patches[i] = F.interpolate(harm_patches[i].unsqueeze(0), size=(Hh, Wh), mode="area")
 
         coarse_app_rgb = util.ssh_normalization(coarse_app_rgb)
         ref_app_loss = self.ref_app_crit(coarse_app_rgb, harm_patches) * self.lambda_ref_coarse
