@@ -159,7 +159,7 @@ class NeRFRenderer(torch.nn.Module):
         z_samp = torch.max(torch.min(z_samp, rays[:, -1:]), rays[:, -2:-1])
         return z_samp
 
-    def composite(self, model, rays, rgb_env, z_samp, coarse=True, app_pass=True, sb=0):
+    def composite(self, model, rays, rgb_enc, z_samp, coarse=True, app_pass=True, sb=0):
         """
         Render RGB and depth for each ray using NeRF alpha-compositing formula,
         given sampled positions along each ray (see sample_*)
@@ -201,16 +201,16 @@ class NeRFRenderer(torch.nn.Module):
 
             in_data = [split_points]
             if app_pass:
-                _, _, C, Hp, Wp = rgb_env.shape
-                rgb_env = rgb_env.reshape(-1, C, Hp, Wp)
-                rgb_env = util.repeat_interleave(rgb_env, K)
+                _, _, C = rgb_enc.shape
+                rgb_enc = rgb_enc.reshape(-1, C)
+                rgb_enc = util.repeat_interleave(rgb_enc, K)
                 if sb > 0:
-                    rgb_env = rgb_env.reshape(
-                        sb, -1, C, Hp, Wp
+                    rgb_enc = rgb_enc.reshape(
+                        sb, -1, C
                     )
 
-                split_rgb_env = torch.split(rgb_env, eval_batch_size, dim=eval_batch_dim)
-                in_data.append(split_rgb_env)
+                split_rgb_enc = torch.split(rgb_enc, eval_batch_size, dim=eval_batch_dim)
+                in_data.append(split_rgb_enc)
             if use_viewdirs:
                 dim1 = K
                 viewdirs = rays[:, None, 3:6].expand(-1, dim1, -1)  # (B, K, 3)
@@ -231,7 +231,7 @@ class NeRFRenderer(torch.nn.Module):
                 for pnts, dirs in zip(split_points, split_viewdirs):
                     val_all.append(model(pnts, None, coarse=coarse, viewdirs=dirs, app_pass=app_pass))
             elif len(in_data) == 3:
-                for pnts, rgb_e, dirs in zip(split_points, split_rgb_env, split_viewdirs):
+                for pnts, rgb_e, dirs in zip(split_points, split_rgb_enc, split_viewdirs):
                     val_all.append(model(pnts, rgb_e, coarse=coarse, viewdirs=dirs, app_pass=app_pass))
 
             points = None
@@ -269,7 +269,7 @@ class NeRFRenderer(torch.nn.Module):
             )
 
     def forward(
-        self, model, rays, rgb_env, app_pass=True, want_weights=False,
+        self, model, rays, rgb_enc, app_pass=True, want_weights=False,
     ):
         """
         :model nerf model, should return (SB, B, (r, g, b, sigma))
@@ -290,13 +290,13 @@ class NeRFRenderer(torch.nn.Module):
 
             superbatch_size = rays.shape[0]
             rays = rays.reshape(-1, 8)  # (SB * B, 8)
-            if rgb_env is not None:
-                assert len(rgb_env.shape) == 5
+            if rgb_enc is not None:
+                assert len(rgb_enc.shape) == 3
 
 
             z_coarse = self.sample_coarse(rays)  # (B, Kc) (SB + B, Kc = B * S?)
             coarse_composite = self.composite(
-                model, rays, rgb_env, z_coarse, coarse=True, app_pass=app_pass, sb=superbatch_size,
+                model, rays, rgb_enc, z_coarse, coarse=True, app_pass=app_pass, sb=superbatch_size,
             )
 
             outputs = DotMap(
@@ -318,7 +318,7 @@ class NeRFRenderer(torch.nn.Module):
                 z_combine = torch.cat(all_samps, dim=-1)  # (B, Kc + Kf)
                 z_combine_sorted, argsort = torch.sort(z_combine, dim=-1)
                 fine_composite = self.composite(
-                    model, rays, rgb_env, z_combine_sorted, coarse=False, app_pass=app_pass, sb=superbatch_size,
+                    model, rays, rgb_enc, z_combine_sorted, coarse=False, app_pass=app_pass, sb=superbatch_size,
                 )
                 outputs.fine = self._format_outputs(
                     fine_composite, superbatch_size, want_weights=want_weights,

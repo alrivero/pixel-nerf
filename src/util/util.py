@@ -714,7 +714,7 @@ def uv_to_rgb_patches(app_imgs, uv_env, patch_size):
 
     app_imgs = app_imgs.unfold(2, P, 1).unfold(3, P, 1)
 
-    return app_imgs[t, :, v, u, :, :].reshape(SB, B, C, P, P)
+    return app_imgs[t, :, v, u, :, :]
 
 def uv_to_rgb_harm_patches(app_imgs, uv_env, patch_size):
     u, v = uv_env
