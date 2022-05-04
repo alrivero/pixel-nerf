@@ -440,15 +440,23 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             fine_app_rgb.append(render_dict.fine.rgb.permute(0, 2, 1))
 
         coarse_app_rgb = torch.cat(coarse_app_rgb, dim=-1).reshape(SB, 3, P, P)
+        coarse_app_rgb = F.interpolate(coarse_app_rgb, size=self.ssh_dim, mode="area")
+
         fine_app_rgb = torch.cat(fine_app_rgb, dim=-1).reshape(SB, 3, P, P)
+        fine_app_rgb = F.interpolate(fine_app_rgb, size=self.ssh_dim, mode="area")
+
+        for i in len(harm_patches):
+            _, Hh, Wh = harm_patches[i].shape
+
+            Hh = int(224 * (Hh / P))
+            Wh = int(224 * (Wh / P))
+            harm_patches[i] = F.interpolate(harm_patches[i], size=(Hh, Wh), mode="area")
 
         coarse_app_rgb = util.ssh_normalization(coarse_app_rgb)
-        coarse_app_rgb = F.interpolate(coarse_app_rgb, size=self.ssh_dim, mode="area")
         ref_app_loss = self.ref_app_crit(coarse_app_rgb, harm_patches) * self.lambda_ref_coarse
         loss_dict["rec"] = ref_app_loss.item()
 
         fine_app_rgb = util.ssh_normalization(fine_app_rgb)
-        fine_app_rgb = F.interpolate(fine_app_rgb, size=self.ssh_dim, mode="area")
         ref_app_loss_fine = self.ref_app_crit(fine_app_rgb, harm_patches) * self.lambda_ref_fine
         ref_app_loss += ref_app_loss_fine
         loss_dict["ref"] = ref_app_loss.item()
