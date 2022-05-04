@@ -598,7 +598,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             if self.app_enc_on:
                 bounding_radius = util.bounding_sphere_radius(cam_rays).unsqueeze(0)
                 test_rays = test_rays.reshape(1, H * W, -1)
-                rgb_env = util.sample_spherical_rgb(test_rays, bounding_radius, app_data)
+                uv_env = util.sample_spherical_uv(test_rays, bounding_radius, app_data, self.patch_dim)
+                rgb_env = util.uv_to_rgb_patches(app_data, uv_env, self.patch_dim)
                 render_dict = self.app_pass(test_rays, rgb_env)
             else:
                 test_rays = test_rays.reshape(1, H * W, -1)
