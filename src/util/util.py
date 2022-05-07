@@ -740,13 +740,21 @@ def patch_encode_image(patch_encoder, img, patch_size, batch_size, ssh_dim, enc_
     img_unfolded = img_unfolded.reshape(SB, C, -1, P, P).permute(0, 2, 1, 3, 4).reshape(-1, C, P, P)
     
     # Making the assumption that the total number of patches is divisible by batch_size
-    b_step = (H * W) // batch_size
-    start_ind = 0
+    h_step = H // batch_size
+    w_step = W // batch_size
+
     encoded_img = []
     for i in range(batch_size):
-        patch_batch = img_unfolded[start_ind:(start_ind+b_step), :, :, :]
-        patch_batch = F.interpolate(patch_batch, size=ssh_dim, mode="bilinear")
-        encoded_img.append(patch_encoder(patch_batch))
+        s_v = i * h_step
+        e_v = (i + 1) * h_step
+        for j in range(batch_size):
+            s_u = j * h_step
+            e_u = (j + 1) * h_step
+
+            patch_batch = img_unfolded[:, :, s_v:e_v, s_u:e_u, :, :]
+            patch_batch = patch_batch.reshape(SB, C, -1, P, P).permute(0, 2, 1, 3, 4).reshape(-1, C, P, P)
+            patch_batch = F.interpolate(patch_batch, size=ssh_dim, mode="bilinear")
+            encoded_img.append(patch_encoder(patch_batch))
     
     encoded_img = torch.cat(encoded_img, dim=0)
     encoded_img.reshape(SB, H, W, enc_dim)
