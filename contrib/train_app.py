@@ -31,7 +31,7 @@ from data.AppearanceDataset import AppearanceDataset
 from random import randint
 from torchvision.transforms.functional_tensor import crop
 from contrib.model.unet_tile_se_norm import StyleEncoder
-from contrib.model import PatchEncoder
+from contrib.model.PatchEncoder import PatchEncoder
 
 
 def extra_args(parser):
