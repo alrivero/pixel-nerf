@@ -226,7 +226,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
             density_loss_conf = conf["loss.density"]
             self.density_app_crit = loss.get_density_loss(density_loss_conf)
-            self.ref_app_crit = loss.ReferenceColorLoss(conf, ref_encoder).to(device=device)
+            self.ref_app_crit = loss.ReferenceColorLoss(ref_encoder).to(device=device)
             
             self.patch_encoder = PatchEncoder(ref_encoder)
         else:
