@@ -233,7 +233,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
             # TEST
             print("HERE")
-            self.ref_img = util.patch_encode_image(PatchEncoder(ref_encoder), self.appearance_img, 8, self.ssh_dim, 512)
+            self.ref_img = util.patch_encode_image(self.patch_encoder, self.appearance_img, self.patch_dim, 8, self.ssh_dim, 512)
             print("DONE")
         else:
             self.appearance_img = None

@@ -9,4 +9,4 @@ class PatchEncoder(nn.Module):
     
     def forward(self, patches):
         x = self.ref_encoder(patches)
-        return self.avg_pool(x)
+        return self.avg_pool(x).squeeze(-1).squeeze(-1)
