@@ -216,6 +216,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         if self.app_enc_on:
             self.appearance_img = dset_app[args.app_set_ind][args.app_ind].unsqueeze(0).to(device=device)
 
+
             self.patch_dim = args.patch_dim
             self.patch_batch_size = args.patch_batch_size
             self.ssh_dim = (224, 224) # Original processing resolution of SHH Encoder
@@ -229,6 +230,11 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             self.ref_app_crit = loss.ReferenceColorLoss(ref_encoder).to(device=device)
             
             self.patch_encoder = PatchEncoder(ref_encoder)
+
+            # TEST
+            print("HERE")
+            self.ref_img = util.patch_encode_image(PatchEncoder(ref_encoder), self.appearance_img, 8, self.ssh_dim, 512)
+            print("DONE")
         else:
             self.appearance_img = None
         
