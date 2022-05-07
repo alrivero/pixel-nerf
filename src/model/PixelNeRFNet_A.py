@@ -96,6 +96,8 @@ class PixelNeRFNet_A(torch.nn.Module):
         self.num_objs = 0
         self.num_views_per_obj = 1
 
+        self.app_enc_on = app_enc_on
+
     def encode(self, images, poses, focal, z_bounds=None, c=None):
         """
         :param images (NS, 3, H, W)
