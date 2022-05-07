@@ -721,8 +721,6 @@ def uv_to_rgb_harm_patches(app_imgs, uv_env, patch_size):
     SB = app_imgs.shape[0]
     B = u.shape[1]
 
-    offset = patch_size // 2
-
     u_min = u.min(dim=1)[0].flatten()
     v_min = v.min(dim=1)[0].flatten()
     u_max = (u + patch_size).max(dim=1)[0].flatten()

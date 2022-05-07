@@ -92,32 +92,21 @@ class RGBWithBackground(torch.nn.Module):
 class ReferenceColorLoss(torch.nn.Module):
     """SSH relighting reference encoding comparison"""
 
-    def __init__(self, conf, encoder_dir=None):
+    def __init__(self, ref_encoder):
         super().__init__()
-        self.ref_encoder = StyleEncoder(4, 3, 32, 512, norm="BN", activ="relu", pad_type='reflect')
-        if conf.get_bool("pretrained", True) and encoder_dir is not None:
-            self.ref_encoder.load_state_dict(torch.load(encoder_dir))
-            print("using reference color loss with pretrained weights")
-        else:
-            print("using reference color loss WITHOUT pretrained weights")
-        
+        self.ref_encoder = ref_encoder
         for param in self.ref_encoder.parameters():
             param.requires_grad = False
         
-        self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+        # self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.ref_loss = torch.torch.nn.MSELoss()
     
     def forward(self, outputs, harm_patches):
         # Our outputs are all P x P patches, but the harmonized patches might not be (?)
         outputs_encodings = self.ref_encoder(outputs)
+        harm_encodings = self.ref_encoder(harm_patches)
 
-        loss = torch.zeros(1).to(device=outputs.get_device())
-        for i in range(len(harm_patches)):
-            harm_encoding = self.ref_encoder(harm_patches[i])
-            
-            loss += self.ref_loss(outputs_encodings[i], harm_encoding[0])
-
-        return loss
+        return self.ref_loss(outputs_encodings, harm_encodings)
 
 
 def get_rgb_loss(conf, coarse=True, using_bg=False, reduction="mean"):

@@ -209,6 +209,7 @@ class ResnetFC_App(ResnetFC):
         combine_layer=1000,
         combine_type="average",
         use_spade=False,
+        stop_f1_grad=True,
         app_enc_on=True
     ):
         """
@@ -221,20 +222,18 @@ class ResnetFC_App(ResnetFC):
         """
         super().__init__(d_in, d_out, n_blocks, d_latent, d_hidden, beta, combine_layer, combine_type, use_spade)
 
+        self.stop_f1_grad = stop_f1_grad
+
         self.app_enc_on = app_enc_on
         if self.app_enc_on:
-            self.app_in = app_in
-
-            self.lin_in_app = nn.Linear(d_in + app_in, d_hidden)
-            nn.init.constant_(self.lin_in.bias, 0.0)
-            nn.init.kaiming_normal_(self.lin_in.weight, a=0, mode="fan_in")
-
+            size_in = self.blocks[self.combine_layer - 1].size_out + app_in
+            size_out = self.blocks[self.combine_layer].size_out
+            self.app_trans_block = ResnetBlockFC(size_in, size_out, size_out, beta)
             self.app_blocks = nn.ModuleList(
-                [ResnetBlockFC(d_hidden, beta=beta) for _ in range(self.n_blocks)]
+                [ResnetBlockFC(d_hidden, beta=beta) for _ in range(self.combine_layer, self.n_blocks)]
             )
-
     
-    def forward(self, zx, combine_inner_dims=(1,), combine_index=None, dim_size=None, app_pass=True):
+    def forward(self, zx, app_enc, combine_inner_dims=(1,), combine_index=None, dim_size=None):
         """
         :param zx (..., d_latent + d_in)
         :param combine_inner_dims Combining dimensions for use with multiview inputs.
@@ -242,28 +241,20 @@ class ResnetFC_App(ResnetFC):
         on dim 1, at combine_layer
         """
         with profiler.record_function("resnetfc_infer"):
-            if app_pass:
-                assert zx.size(-1) == self.d_latent + self.d_in + self.app_in
-            else:
-                assert zx.size(-1) == self.d_latent + self.d_in
-
+            assert zx.size(-1) == self.d_latent + self.d_in
             if self.d_latent > 0:
                 z = zx[..., : self.d_latent]
                 x = zx[..., self.d_latent :]
             else:
                 x = zx
             if self.d_in > 0:
-                x = self.lin_in_app(x) if app_pass else self.lin_in(x)
+                x = self.lin_in(x)
             else:
                 x = torch.zeros(self.d_hidden, device=zx.device)
 
-            blocks = self.app_blocks if app_pass else self.blocks
-            for blkid in range(self.n_blocks):
-                if blkid == self.combine_layer:
-                    x = util.combine_interleaved(
-                        x, combine_inner_dims, self.combine_type
-                    )
-
+            # Run through the first F1 layers
+            blocks = self.blocks
+            for blkid in range(self.combine_layer):
                 if self.d_latent > 0 and blkid < self.combine_layer:
                     tz = self.lin_z[blkid](z)
                     if self.use_spade:
@@ -273,6 +264,34 @@ class ResnetFC_App(ResnetFC):
                         x = x + tz
 
                 x = blocks[blkid](x)
+            
+            # Combine the output given by the first F1 layers
+            x = util.combine_interleaved(
+                x, combine_inner_dims, self.combine_type
+            )
+            if self.stop_f1_grad:
+                x = x.detach()
+            
+            # Choose whether to continue using the rest of the regular pixelNeRF F2
+            # or use the F2 for PixelNeRF-A
+            cont_ind = self.combine_layer
+            end_ind = self.n_blocks
+            if app_enc is None:
+                cont_ind = self.combine_layer
+                end_ind = self.n_blocks
+            else:
+                blocks = self.app_blocks
+                cont_ind = 0
+                end_ind = len(self.app_blocks)
+
+                x = torch.cat((app_enc, x), dim=-1)
+                x = self.app_trans_block(x) # Use transition block to move to lower dim used by blocks
+            
+            # Continue rendering our pass through the network
+            for blkid in range(cont_ind, end_ind):
+                x = blocks[blkid](x)
+            
+            # Final linear layer
             out = self.lin_out(self.activation(x))
             return out
 

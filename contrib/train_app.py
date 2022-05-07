@@ -30,6 +30,8 @@ from dotmap import DotMap
 from data.AppearanceDataset import AppearanceDataset
 from random import randint
 from torchvision.transforms.functional_tensor import crop
+from contrib.model.unet_tile_se_norm import StyleEncoder
+from contrib.model import PatchEncoder
 
 
 def extra_args(parser):
@@ -89,6 +91,12 @@ def extra_args(parser):
         help="Train without appearance encoder enhancements",
     )
     parser.add_argument(
+        "--freeze_f1",
+        action="store_true",
+        default=None,
+        help="Freeze first multi-view network weights and only train later MLP",
+    )
+    parser.add_argument(
         "--refencdir", "-DRE", type=str, default=None, help="Reference encoder directory (used for loss)"
     )
     parser.add_argument(
@@ -126,6 +134,7 @@ net = make_model(
     conf["model"],
     app_enc_on = not args.app_enc_off,
     stop_encoder_grad=args.freeze_enc,
+    stop_f1_grad=args.freeze_f1
 ).to(device=device)
 
 
@@ -177,9 +186,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             self.lambda_ref_coarse,
             self.lambda_ref_fine
         ))
-        density_loss_conf = conf["loss.density"]
-        self.density_app_crit = loss.get_density_loss(density_loss_conf)
-        self.ref_app_crit = loss.ReferenceColorLoss(conf, args.refencdir).to(device=device)
 
         if args.resume:
             if os.path.exists(self.renderer_state_path):
@@ -213,6 +219,16 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             self.patch_dim = args.patch_dim
             self.patch_batch_size = args.patch_batch_size
             self.ssh_dim = (224, 224) # Original processing resolution of SHH Encoder
+
+            # Reference encoder used across network
+            ref_encoder = StyleEncoder(4, 3, 32, 512, norm="BN", activ="relu", pad_type='reflect')
+            ref_encoder.load_state_dict(torch.load(args.refencdir))
+
+            density_loss_conf = conf["loss.density"]
+            self.density_app_crit = loss.get_density_loss(density_loss_conf)
+            self.ref_app_crit = loss.ReferenceColorLoss(conf, ref_encoder).to(device=device)
+            
+            self.patch_encoder = PatchEncoder(ref_encoder)
         else:
             self.appearance_img = None
         
@@ -447,6 +463,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         for i in range(len(harm_patches)):
             harm_patches[i] = F.interpolate(harm_patches[i].unsqueeze(0), size=self.ssh_dim, mode="area")
+        harm_patches = torch.cat(harm_patches, dim=0)
 
         coarse_app_rgb = util.ssh_normalization(coarse_app_rgb)
         ref_app_loss = self.ref_app_crit(coarse_app_rgb, harm_patches) * self.lambda_ref_coarse
@@ -495,7 +512,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         nerf_uv_env = util.sample_spherical_uv(nerf_rays, nerf_radii, app_data, self.patch_dim)
         nerf_rgb_env = util.uv_to_rgb_patches(app_data, nerf_uv_env, self.patch_dim)
-        nerf_rgb_enc = net.patch_encoder(nerf_rgb_env).reshape(SB, B, -1)
+        nerf_rgb_env = F.interpolate(nerf_rgb_env, size=self.ssh_dim, mode="area")
+        nerf_rgb_enc = self.patch_encoder(nerf_rgb_env).reshape(SB, B, -1).detach()
 
         # Render out our scene with our ground truth model
         reg_render_dict = self.reg_pass(nerf_rays)
@@ -518,7 +536,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         patch_uv_env = util.sample_spherical_uv(patch_rays, patch_radii, app_data, self.patch_dim)
         patch_rgb_env = util.uv_to_rgb_patches(app_data, patch_uv_env, self.patch_dim)
-        patch_rgb_enc = net.patch_encoder(patch_rgb_env).reshape(SB, B, -1)
+        patch_rgb_env = F.interpolate(patch_rgb_env, size=self.ssh_dim, mode="area")
+        patch_rgb_enc = self.patch_encoder(patch_rgb_env).reshape(SB, B, -1).detach()
         harm_patches = util.uv_to_rgb_harm_patches(app_data, patch_uv_env, self.patch_dim)
 
         # These are a lot of rays. Decompose them into render batches and render
@@ -609,7 +628,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 test_rays = test_rays.reshape(1, H * W, -1)
                 uv_env = util.sample_spherical_uv(test_rays, bounding_radius, app_data, self.patch_dim)
                 rgb_env = util.uv_to_rgb_patches(app_data, uv_env, self.patch_dim)
-                rgb_enc = net.patch_encoder(rgb_env).reshape(1, H * W, -1)
+                rgb_env = F.interpolate(rgb_env, size=self.ssh_dim, mode="area")
+                rgb_enc = self.patch_encoder(rgb_env).reshape(1, H * W, -1).detach()
                 render_dict = self.app_pass(test_rays, rgb_enc)
             else:
                 test_rays = test_rays.reshape(1, H * W, -1)

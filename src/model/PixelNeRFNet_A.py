@@ -5,14 +5,13 @@ import warnings
 from .model_util import make_encoder, make_mlp
 from .encoder import ImageEncoder
 from .code import PositionalEncoding
-from contrib.model.PatchEncoder import PatchEncoder
 import torch.autograd.profiler as profiler
 from util import repeat_interleave
 from torch import nn
 
 class PixelNeRFNet_A(torch.nn.Module):
     # For now, identical to the PixelNeRF
-    def __init__(self, conf, app_enc_on=True, stop_encoder_grad=False):
+    def __init__(self, conf, app_enc_on=True, stop_encoder_grad=False, stop_f1_grad=False):
         """
         :param conf PyHocon config subtree 'model'
         """
@@ -71,6 +70,7 @@ class PixelNeRFNet_A(torch.nn.Module):
             conf["mlp_coarse"], 
             d_in, d_latent, 
             d_out=d_out, 
+            stop_f1_grad=stop_f1_grad,
             app_enc_on=app_enc_on
         )
         self.mlp_fine = make_mlp(
@@ -79,6 +79,7 @@ class PixelNeRFNet_A(torch.nn.Module):
             d_latent, 
             d_out=d_out, 
             allow_empty=True,
+            stop_f1_grad=stop_f1_grad,
             app_enc_on=app_enc_on
         )
         # Note: this is world -> camera, and bottom row is omitted
@@ -94,11 +95,6 @@ class PixelNeRFNet_A(torch.nn.Module):
 
         self.num_objs = 0
         self.num_views_per_obj = 1
-
-        # Appearance encoder additions
-        self.app_enc_on = app_enc_on
-        if self.app_enc_on:
-            self.patch_encoder = PatchEncoder(conf["patch_encoder"])
 
     def encode(self, images, poses, focal, z_bounds=None, c=None):
         """
@@ -157,7 +153,7 @@ class PixelNeRFNet_A(torch.nn.Module):
         if self.use_global_encoder:
             self.global_encoder(images)
 
-    def forward(self, xyz, rgb_env, coarse=True, viewdirs=None, app_pass=True, far=False):
+    def forward(self, xyz, rgb_enc, coarse=True, viewdirs=None, app_pass=True, far=False):
         """
         Predict (r, g, b, sigma) at world space points xyz.
         Please call encode first!
@@ -214,14 +210,6 @@ class PixelNeRFNet_A(torch.nn.Module):
                     z_feature = self.code(z_feature)
 
                 mlp_input = z_feature
-
-            # Pass encoded RGB to mlp layers (currently assuming mlp_input is not None)
-            if app_pass:
-                rgb_env = rgb_env.reshape(SB, B, -1)
-                rgb_env = repeat_interleave(rgb_env, NS)
-                rgb_env = rgb_env.reshape(SB * B * NS, -1)
-
-                mlp_input = torch.cat((rgb_env, mlp_input), dim=-1)
             
             if self.use_encoder:
                 # Grab encoder's latent code.
@@ -264,6 +252,7 @@ class PixelNeRFNet_A(torch.nn.Module):
             if coarse or self.mlp_fine is None:
                 mlp_output = self.mlp_coarse(
                     mlp_input,
+                    rgb_enc,
                     combine_inner_dims=(self.num_views_per_obj, B),
                     combine_index=combine_index,
                     dim_size=dim_size,
@@ -272,6 +261,7 @@ class PixelNeRFNet_A(torch.nn.Module):
             else:
                 mlp_output = self.mlp_fine(
                     mlp_input,
+                    rgb_enc,
                     combine_inner_dims=(self.num_views_per_obj, B),
                     combine_index=combine_index,
                     dim_size=dim_size,
@@ -325,18 +315,12 @@ class PixelNeRFNet_A(torch.nn.Module):
                 ).format(model_path)
             )
 
-        # Make a copy of model for ground truth eval (Starting from an existing PixelNeRF model)
-        if not args.resume and not args.app_enc_off:
-            for i in range(self.mlp_fine.n_blocks):
-                self.mlp_coarse.app_blocks[i].load_state_dict(self.mlp_coarse.blocks[i].state_dict())
-                self.mlp_fine.app_blocks[i].load_state_dict(self.mlp_fine.blocks[i].state_dict())
-
-            # Intialize our patch encoder
-            def init_weights(m):
-                if isinstance(m, nn.Linear):
-                    torch.nn.init.xavier_uniform_(m.weight)
-                    nn.init.constant_(m.bias, 0.0)
-            self.patch_encoder.apply(init_weights)
+        # Make a copy of F2 for ground truth evaluation
+        if self.app_enc_on and not args.resume:
+            for i in range(self.mlp_fine.combine_layer, self.mlp_fine.n_blocks):
+                app_ind = i - self.mlp_fine.combine_layer
+                self.mlp_coarse.app_blocks[app_ind].load_state_dict(self.mlp_coarse.blocks[i].state_dict())
+                self.mlp_fine.app_blocks[app_ind].load_state_dict(self.mlp_fine.blocks[i].state_dict())
         
         return self
 
