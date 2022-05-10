@@ -693,6 +693,10 @@ def spherical_intersection_to_map_proj(map, intersections, radii, patch_size):
     H, W = map.shape[2:4]
     radii = radii.expand(1, B)
 
+    # Adjust the usable range of H, W
+    H -= (patch_size // 2 + 1)
+    W -= (patch_size // 2 + 1)
+
     x = intersections[:, :, 0]
     y = intersections[:, :, 1]
     z = intersections[:, :, 2]
@@ -711,9 +715,9 @@ def spherical_intersection_to_mean_map_proj(map, intersections, radii, patch_siz
     _, B, _ = intersections.shape
     H, W = map.shape[2:4]
 
-    # Indexing is from 0 through H/W - 1
-    H -= 1
-    W -= 1
+    # Adjust the usable range of H, W
+    H -= (patch_size // 2 + 1)
+    W -= (patch_size // 2 + 1)
 
     x_mean = intersections[:, :, 0].mean(dim=1)
     y_mean = intersections[:, :, 1].mean(dim=1)
