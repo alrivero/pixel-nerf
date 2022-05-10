@@ -705,10 +705,6 @@ def spherical_intersection_to_map_proj(map, intersections, radii, patch_size):
     u = (W * (azimuth / (2 * pi))).long()
     v = (H * (y + radii) / (2 * radii)).long()
 
-    # We need to account for padding applied to image
-    u += patch_size // 2
-    v += patch_size // 2
-
     return u, v
 
 def spherical_intersection_to_mean_map_proj(map, intersections, radii, patch_size):
@@ -726,10 +722,6 @@ def spherical_intersection_to_mean_map_proj(map, intersections, radii, patch_siz
 
     u_mean = (W * (azimuth / (2 * pi))).long()
     v_mean = (H * (y_mean + radii) / (2 * radii)).long()
-
-    # We need to account for padding applied to image
-    u_mean += patch_size // 2
-    v_mean += patch_size // 2
 
     return u_mean, v_mean
 

@@ -508,7 +508,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         nerf_rays, nerf_rays_gt, nerf_radii = self.rand_rays(data, is_train, global_step)
         SB, B, _ = nerf_rays.shape
 
-        nerf_enc_patches = util.sample_spherical_enc_patches(nerf_rays, nerf_radii, app_data, self.ssh_HW)
+        nerf_enc_patches = util.sample_spherical_enc_patches(nerf_rays, nerf_radii, app_data, self.ssh_HW - 1)
         nerf_encs = self.patch_encoder(nerf_enc_patches).detach().reshape(SB, B, -1)
 
         # Render out our scene with our ground truth model
@@ -530,7 +530,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         patch_rays, _, patch_radii = self.patch_rays(data)
         B = patch_rays.shape[1]
 
-        patch_harm_patch = util.sample_spherical_harm_patch(patch_rays, patch_radii, app_data, self.ssh_HW)
+        patch_harm_patch = util.sample_spherical_harm_patch(patch_rays, patch_radii, app_data, self.ssh_HW - 1)
         patch_harm_encs = self.patch_encoder(patch_harm_patch).detach().reshape(SB, 1, -1).expand(SB, B, -1)
 
         # These are a lot of rays. Decompose them into render batches and render

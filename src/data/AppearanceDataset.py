@@ -70,7 +70,7 @@ class AppearanceDataset(torch.utils.data.Dataset):
         self.max_imgs = max_imgs
         self.lindisp = False
         self.resize = Resize(image_size)
-        self.ssh_pad = Pad(224 // 2, padding_mode="reflect")
+        self.ssh_pad = Pad(223 // 2, padding_mode="reflect")
     
     def __len__(self):
         return len(self.all_objs)
