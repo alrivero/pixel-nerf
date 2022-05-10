@@ -223,7 +223,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             self.ssh_dim = (224, 224) # Original processing resolution of SHH Encoder
 
             # Reference encoder used across network
-            ref_encoder = StyleEncoder(4, 3, 32, 512, norm="BN", activ="relu", pad_type='reflect')
+            ref_encoder = StyleEncoder(4, 3, 32, 512, norm="BN", activ="relu", pad_type='reflect').to(device=device)
             ref_encoder.load_state_dict(torch.load(args.refencdir))
 
             density_loss_conf = conf["loss.density"]
