@@ -5,7 +5,7 @@ import glob
 import random
 from PIL import Image
 from util import get_image_to_tensor_balanced
-from torchvision.transforms import Resize
+from torchvision.transforms import Resize, Pad
 
 
 class AppearanceDataset(torch.utils.data.Dataset):
@@ -70,6 +70,7 @@ class AppearanceDataset(torch.utils.data.Dataset):
         self.max_imgs = max_imgs
         self.lindisp = False
         self.resize = Resize(image_size)
+        self.ssh_pad = Pad(224 // 2, padding_mode="reflect")
     
     def __len__(self):
         return len(self.all_objs)
@@ -88,7 +89,8 @@ class AppearanceDataset(torch.utils.data.Dataset):
         all_imgs = []
         for _, rgb_path in enumerate(rgb_paths):
             img = Image.open(rgb_path)
-            img  = self.resize(img)
+            img = self.resize(img)
+            img = self.ssh_pad(img)
             img_tensor = self.image_to_tensor(img)
 
             all_imgs.append(img_tensor)

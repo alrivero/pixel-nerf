@@ -219,6 +219,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
             self.patch_dim = args.patch_dim
             self.patch_batch_size = args.patch_batch_size
+            self.ssh_HW = 224
             self.ssh_dim = (224, 224) # Original processing resolution of SHH Encoder
 
             # Reference encoder used across network
@@ -450,7 +451,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         
         return density_app_loss
 
-    def app_loss(self, src_images, patch_dicts, harm_patches, loss_dict):
+    def app_loss(self, src_images, patch_dicts, harm_patch, loss_dict):
         SB, _, D, H, W = src_images.shape
         P = self.patch_dim
 
@@ -462,21 +463,17 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             fine_app_rgb.append(render_dict.fine.rgb.permute(0, 2, 1))
 
         coarse_app_rgb = torch.cat(coarse_app_rgb, dim=-1).reshape(SB, 3, P, P)
-        coarse_app_rgb = F.interpolate(coarse_app_rgb, size=self.ssh_dim, mode="area")
+        coarse_app_rgb = F.interpolate(coarse_app_rgb, size=self.ssh_dim, mode="bilinear")
 
         fine_app_rgb = torch.cat(fine_app_rgb, dim=-1).reshape(SB, 3, P, P)
-        fine_app_rgb = F.interpolate(fine_app_rgb, size=self.ssh_dim, mode="area")
-
-        for i in range(len(harm_patches)):
-            harm_patches[i] = F.interpolate(harm_patches[i].unsqueeze(0), size=self.ssh_dim, mode="area")
-        harm_patches = torch.cat(harm_patches, dim=0)
+        fine_app_rgb = F.interpolate(fine_app_rgb, size=self.ssh_dim, mode="bilinear")
 
         coarse_app_rgb = util.ssh_normalization(coarse_app_rgb)
-        ref_app_loss = self.ref_app_crit(coarse_app_rgb, harm_patches) * self.lambda_ref_coarse
+        ref_app_loss = self.ref_app_crit(coarse_app_rgb, harm_patch) * self.lambda_ref_coarse
         loss_dict["rec"] = ref_app_loss.item()
 
         fine_app_rgb = util.ssh_normalization(fine_app_rgb)
-        ref_app_loss_fine = self.ref_app_crit(fine_app_rgb, harm_patches) * self.lambda_ref_fine
+        ref_app_loss_fine = self.ref_app_crit(fine_app_rgb, harm_patch) * self.lambda_ref_fine
         ref_app_loss += ref_app_loss_fine
         loss_dict["ref"] = ref_app_loss.item()
 
@@ -516,16 +513,14 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         nerf_rays, nerf_rays_gt, nerf_radii = self.rand_rays(data, is_train, global_step)
         SB, B, _ = nerf_rays.shape
 
-        nerf_uv_env = util.sample_spherical_uv(nerf_rays, nerf_radii, app_data, self.patch_dim)
-        nerf_rgb_env = util.uv_to_rgb_patches(app_data, nerf_uv_env, self.patch_dim)
-        nerf_rgb_env = F.interpolate(nerf_rgb_env, size=self.ssh_dim, mode="area")
-        nerf_rgb_enc = self.patch_encoder(nerf_rgb_env).reshape(SB, B, -1).detach()
+        nerf_enc_patches = util.sample_spherical_enc_patches(nerf_rays, nerf_radii, app_data, self.ssh_HW)
+        nerf_encs = self.patch_encoder(nerf_enc_patches).detach().reshape(SB, B, -1)
 
         # Render out our scene with our ground truth model
         reg_render_dict = self.reg_pass(nerf_rays)
 
         # Render out our scene using appearance encoding and trainable F2
-        app_render_dict = self.app_pass(nerf_rays, nerf_rgb_enc)
+        app_render_dict = self.app_pass(nerf_rays, nerf_encs)
 
         loss_dict = {}
         
@@ -534,17 +529,14 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         # Compute our density loss using the depthmap from our ground truth
         depth_loss = self.depth_loss(app_render_dict, reg_render_dict, loss_dict)
 
-        reg_render_dict = app_render_dict = nerf_rgb_env = None
+        reg_render_dict = app_render_dict = None
 
         # Choose rays corresponding to an image patch at our disposal
         patch_rays, _, patch_radii = self.patch_rays(data)
         B = patch_rays.shape[1]
 
-        patch_uv_env = util.sample_spherical_uv(patch_rays, patch_radii, app_data, self.patch_dim)
-        patch_rgb_env = util.uv_to_rgb_patches(app_data, patch_uv_env, self.patch_dim)
-        patch_rgb_env = F.interpolate(patch_rgb_env, size=self.ssh_dim, mode="area")
-        patch_rgb_enc = self.patch_encoder(patch_rgb_env).reshape(SB, B, -1).detach()
-        harm_patches = util.uv_to_rgb_harm_patches(app_data, patch_uv_env, self.patch_dim)
+        patch_harm_patch = util.sample_spherical_harm_patch(patch_rays, patch_radii, app_data, self.ssh_HW)
+        patch_harm_encs = self.patch_encoder(patch_harm_patch).detach().reshape(SB, 1, -1).expand(SB, B, -1)
 
         # These are a lot of rays. Decompose them into render batches and render
         batch_step = B // self.patch_batch_size
@@ -558,11 +550,11 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 b_end += remaining
 
             batch_rays = patch_rays[:, b_start:b_end, :]
-            batch_rgb_enc = patch_rgb_enc[:, b_start:b_end, :]
+            batch_rgb_enc = patch_harm_encs[:, b_start:b_end, :]
             patch_render_out.append(self.app_pass(batch_rays, batch_rgb_enc))
 
         # Compute our appearance loss using our appearance encoder and these subpatches
-        app_loss = self.app_loss(src_images, patch_render_out, harm_patches, loss_dict)
+        app_loss = self.app_loss(src_images, patch_render_out, patch_harm_patch, loss_dict)
 
         # Compute our standard NeRF loss
         loss = nerf_loss + depth_loss + app_loss
