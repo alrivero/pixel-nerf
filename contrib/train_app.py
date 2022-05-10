@@ -212,6 +212,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         self.app_enc_on = not args.app_enc_off
         self.calc_losses = self.calc_losses_app if self.app_enc_on else self.calc_losses_no_app
 
+        self.views = torch.arange(NV, step=(NV // args.nviews))
+
         # If we are, that means we're using a background and patch loss
         if self.app_enc_on:
             self.appearance_img = dset_app[args.app_set_ind][args.app_ind].unsqueeze(0).to(device=device)
@@ -248,23 +250,10 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         all_poses = data["poses"].to(device=device)  # (SB, NV, 4, 4)
         SB, NV, _, _, _ = all_images.shape
         
-        curr_nviews = nviews[torch.randint(0, len(nviews), ()).item()]
-        if curr_nviews == 1:
-            image_ord = torch.randint(0, NV, (SB, 1)).to(device=device)
-        else:
-            image_ord = torch.empty((SB, curr_nviews), dtype=torch.long).to(device=device)
-        
-        for obj_idx in range(SB):
-            if curr_nviews > 1:
-                # Somewhat inefficient, don't know better way
-                image_ord[obj_idx] = torch.from_numpy(
-                    np.random.choice(NV, curr_nviews, replace=False)
-                )
-        
         src_images = util.batched_index_select_nd(
-            all_images, image_ord
+            all_images, self.views
         )  # (SB, NS, 3, H, W)
-        src_poses = util.batched_index_select_nd(all_poses, image_ord)  # (SB, NS, 4, 4)
+        src_poses = util.batched_index_select_nd(all_poses, self.views)  # (SB, NS, 4, 4)
 
         return src_images, src_poses
 
@@ -314,6 +303,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             cam_rays = util.gen_rays(
                 poses, W, H, focal, self.z_near, self.z_far, c=c
             )  # (NV, H, W, 8)
+            cam_rays = util.batched_index_select_nd(cam_rays, self.views)
 
             bounding_radius = util.bounding_sphere_radius(cam_rays).unsqueeze(0)
 
@@ -326,7 +316,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 pix = util.bbox_sample(bboxes, args.ray_batch_size)
                 pix_inds = pix[..., 0] * H * W + pix[..., 1] * W + pix[..., 2]
             else:
-                pix_inds = torch.randint(0, NV * H * W, (args.ray_batch_size,))
+                pix_inds = torch.randint(0, args.nviews * H * W, (args.ray_batch_size,))
 
             rgb_gt = rgb_gt_all[pix_inds]  # (ray_batch_size, 3)
             rays = cam_rays.view(-1, cam_rays.shape[-1])[pix_inds].to(
@@ -393,10 +383,10 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         all_rays = torch.stack(all_rays)  # (SB, ray_batch_size, 8)
         all_radii = torch.stack(all_radii)
 
-        image_ord = torch.randint(0, NV, (SB, 1)).to(device=device)
-        all_rays = util.batched_index_select_nd(all_rays, image_ord)
+
+        all_rays = util.batched_index_select_nd(all_rays, self.views)
         all_rays = all_rays.permute(0, 1, 3, 4, 2).reshape(SB, -1, 8)
-        all_rgb_gt = util.batched_index_select_nd(all_rgb_gt, image_ord).reshape(SB, -1, 3)
+        all_rgb_gt = util.batched_index_select_nd(all_rgb_gt, self.views).reshape(SB, -1, 3)
 
         all_poses = all_images = None
 
