@@ -231,11 +231,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             self.ref_app_crit = loss.ReferenceColorLoss(ref_encoder).to(device=device)
             
             self.patch_encoder = PatchEncoder(ref_encoder)
-
-            # TEST
-            print("HERE")
-            self.ref_img = util.patch_encode_image(self.patch_encoder, self.appearance_img, self.patch_dim, 15, self.ssh_dim, 512)
-            print("DONE")
         else:
             self.appearance_img = None
         
