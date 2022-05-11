@@ -326,9 +326,9 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 device=device
             )  # (ray_batch_size, 8)
 
-            all_rgb_gt.append(rgb_gt)
-            all_rays.append(rays)
-            all_radii.append(bounding_radius)
+            all_rgb_gt.append(rgb_gt.unsqueeze(0))
+            all_rays.append(rays.unsqueeze(0))
+            all_radii.append(bounding_radius.unsqueeze(0))
 
         all_rgb_gt = torch.stack(all_rgb_gt)  # (SB, ray_batch_size, 3)
         all_rays = torch.stack(all_rays)  # (SB, ray_batch_size, 8)
