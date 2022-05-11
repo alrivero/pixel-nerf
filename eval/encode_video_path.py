@@ -191,7 +191,6 @@ render_rays = util.gen_rays(
 # (NV, H, W, 8)
 bounding_radius = torch.tensor(args.radius).to(device=device)
 render_rays = render_rays.reshape(1, -1, 8)
-render_patches = util.sample_spherical_enc_patches(render_rays, bounding_radius, app_imgs, 223)
 
 with torch.no_grad():
     print("Encoding", args.num_views * H * W, "rays")
