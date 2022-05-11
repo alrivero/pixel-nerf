@@ -212,7 +212,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         self.app_enc_on = not args.app_enc_off
         self.calc_losses = self.calc_losses_app if self.app_enc_on else self.calc_losses_no_app
 
-        self.views = torch.arange(NV, step=(NV // args.nviews))
+        self.views = torch.arange(NV, step=(NV // int(args.nviews)))
 
         # If we are, that means we're using a background and patch loss
         if self.app_enc_on:
@@ -316,7 +316,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 pix = util.bbox_sample(bboxes, args.ray_batch_size)
                 pix_inds = pix[..., 0] * H * W + pix[..., 1] * W + pix[..., 2]
             else:
-                pix_inds = torch.randint(0, args.nviews * H * W, (args.ray_batch_size,))
+                pix_inds = torch.randint(0, int(args.nviews) * H * W, (args.ray_batch_size,))
 
             rgb_gt = rgb_gt_all[pix_inds]  # (ray_batch_size, 3)
             rays = cam_rays.view(-1, cam_rays.shape[-1])[pix_inds].to(
