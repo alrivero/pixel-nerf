@@ -189,7 +189,7 @@ render_rays = util.gen_rays(
     c=c * args.scale if c is not None else None,
 ).to(device=device)
 # (NV, H, W, 8)
-bounding_radius = torch.tensor(args.radius)
+bounding_radius = torch.tensor(args.radius).to(device=device)
 render_rays = render_rays.reshape(1, -1, 8)
 render_patches = util.sample_spherical_enc_patches(render_rays, bounding_radius, app_imgs, 223)
 
