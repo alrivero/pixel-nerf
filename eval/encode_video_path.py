@@ -197,7 +197,7 @@ with torch.no_grad():
     print("Encoding", args.num_views * H * W, "rays")
     all_encs = []
     for rays in tqdm.tqdm(
-        torch.split(render_rays.view(-1, 8), args.ray_batch_size, dim=0, dim=0)
+        torch.split(render_rays.view(-1, 8), args.ray_batch_size, dim=0)
     ):
         patches = util.sample_spherical_enc_patches(rays, bounding_radius, app_imgs, 223)
         batch_encs = ref_encoder(patches)
