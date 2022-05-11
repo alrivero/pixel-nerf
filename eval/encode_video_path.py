@@ -122,7 +122,7 @@ ref_encoder.load_state_dict(torch.load(args.refencdir))
 print("Generating rays")
 dtu_format = hasattr(dset, "sub_format") and dset.sub_format == "dtu"
 
-dset_app = AppearanceDataset(args.appdir, "train", image_size=(300, 600)) # SET IMAGE SIZE
+dset_app = AppearanceDataset(args.appdir, "train", image_size=(2048, 4096)) # SET IMAGE SIZE
 app_imgs = dset_app[args.app_set_ind][args.app_ind].unsqueeze(0).to(device=device)
 
 if dtu_format:
@@ -196,9 +196,10 @@ render_patches = util.sample_spherical_enc_patches(render_rays, bounding_radius,
 with torch.no_grad():
     print("Encoding", args.num_views * H * W, "rays")
     all_encs = []
-    for patches in tqdm.tqdm(
-        torch.split(render_patches, args.ray_batch_size, dim=0)
+    for rays in tqdm.tqdm(
+        torch.split(render_rays.view(-1, 8), args.ray_batch_size, dim=0, dim=0)
     ):
+        patches = util.sample_spherical_enc_patches(rays, bounding_radius, app_imgs, 223)
         batch_encs = ref_encoder(patches)
         all_encs.append(batch_encs)
     all_encs = torch.cat(all_encs)
