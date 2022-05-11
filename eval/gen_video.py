@@ -148,7 +148,7 @@ print("Generating rays")
 #     app_size = (app_size_h, app_size_w)
 dtu_format = hasattr(dset, "sub_format") and dset.sub_format == "dtu"
 
-dset_app = AppearanceDataset(args.appdir, "train", image_size=(300, 600))
+dset_app = AppearanceDataset(args.appdir, "train", image_size=(2048, 4096))
 app_imgs = dset_app[args.app_set_ind][args.app_ind].unsqueeze(0).to(device=device)
 
 if dtu_format:
