@@ -260,7 +260,7 @@ with torch.no_grad():
         unq_v = unique_uv[:, 1].reshape(1, -1, 1)
         unq_patches = util.uv_to_rgb_patches(app_imgs, (unq_u, unq_v), 223)
         unq_encs = patch_encoder(unq_patches)
-        all_encs = torch.zeros(B, 512)
+        all_encs = torch.zeros(B, 512).to(device=device)
 
         # Render out our scene using these encodings per ray
         all_encs[inv_map] = unq_encs[inv_map]
