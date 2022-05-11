@@ -295,13 +295,13 @@ with torch.no_grad():
         harm_area = zero_pad(harm_area)
 
         all_rgb_fine.append(rgb[0])
-        all_rgb_env.append(harm_area)
+        all_rgb_env.append(harm_area.permute(0, 2, 3, 1))
     _depth = None
 
     rgb_fine = torch.cat(all_rgb_fine)
     # rgb_fine (V*H*W, 3)
     rgb_env = torch.cat(all_rgb_env)
-    frames = torch.cat((rgb_fine.view(-1, H, W, 3), rgb_env), dim=-1)
+    frames = torch.cat((rgb_fine.view(-1, H, W, 3), rgb_env), dim=-2)
 
 print("Writing video")
 vid_name = "{:04}".format(args.subset)
