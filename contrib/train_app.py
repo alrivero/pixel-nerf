@@ -375,7 +375,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             i = randint(0, H - P)
             j = randint(0, W - P)
 
-            rgb_gt = rgb_gt_all[self.views[obj_idx]].permute(0, 3, 1, 2)
+            rgb_gt = rgb_gt_all[self.views[obj_idx]]
             rgb_gt = crop(rgb_gt, i, j, P, P)
             rays = cam_rays[self.views[obj_idx]]
             rays = crop(rays, i, j, P, P)
