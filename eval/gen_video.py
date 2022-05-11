@@ -244,11 +244,13 @@ with torch.no_grad():
         c=c,
     )
 
+    view_step = H * W
+
     print("Rendering", args.num_views * H * W, "rays")
     all_rgb_fine = []
     all_rgb_env = []
     for rays in tqdm.tqdm(
-        torch.split(render_rays.view(-1, 8), args.ray_batch_size, dim=0)
+        torch.split(render_rays.view(-1, 8), view_step, dim=0)
     ):
         B, _ = rays.shape
         uv_env = util.sample_spherical_uv(rays[None], bounding_radius, app_imgs, 223)
