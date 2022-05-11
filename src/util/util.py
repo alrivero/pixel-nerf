@@ -689,9 +689,9 @@ def sphere_intersection(rays, radii):
     return cam_pos + cam_dir * t
 
 def spherical_intersection_to_map_proj(map, intersections, radii, patch_size):
-    _, B, _ = intersections.shape
+    SB, B, _ = intersections.shape
     H, W = map.shape[2:4]
-    radii = radii.expand(1, B)
+    radii = radii.expand(SB, B)
 
     # Adjust the usable range of H, W
     H -= patch_size
@@ -708,7 +708,6 @@ def spherical_intersection_to_map_proj(map, intersections, radii, patch_size):
     return u, v
 
 def spherical_intersection_to_mean_map_proj(map, intersections, radii, patch_size):
-    _, B, _ = intersections.shape
     H, W = map.shape[2:4]
 
     # Adjust the usable range of H, W
@@ -727,7 +726,7 @@ def spherical_intersection_to_mean_map_proj(map, intersections, radii, patch_siz
 
 def uv_to_rgb_patches(app_imgs, uv_env, patch_size):
     u, v = uv_env
-    SB, C, _, _ = app_imgs.shape
+    SB, _, _, _ = app_imgs.shape
     B = u.shape[1]
     P = patch_size
 
