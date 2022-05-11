@@ -23,7 +23,7 @@ from data.AppearanceDataset import AppearanceDataset
 from contrib.model.unet_tile_se_norm import StyleEncoder
 from torch.nn import ZeroPad2d
 from contrib import debug
-from contrib.model import PatchEncoder
+from contrib.model.PatchEncoder import PatchEncoder
 
 
 def extra_args(parser):
