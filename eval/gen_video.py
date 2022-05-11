@@ -286,7 +286,7 @@ with torch.no_grad():
 
         Hr = int(Ha * resize_ratio)
         Wr = int(Wa * resize_ratio)
-        harm_area = F.interpolate(harm_area, size=(Ha, Wa), mode="bilinear")
+        harm_area = F.interpolate(harm_area, size=(Hr, Wr), mode="bilinear")
 
         # Pad if necessary
         pad_h = max(H - Hr, 0)
