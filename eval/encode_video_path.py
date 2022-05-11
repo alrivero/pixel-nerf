@@ -198,7 +198,7 @@ with torch.no_grad():
     for rays in tqdm.tqdm(
         torch.split(render_rays.view(-1, 8), args.ray_batch_size, dim=0)
     ):
-        patches = util.sample_spherical_enc_patches(rays, bounding_radius, app_imgs, 223)
+        patches = util.sample_spherical_enc_patches(rays.unsqueeze(0), bounding_radius, app_imgs, 223)
         batch_encs = ref_encoder(patches)
         all_encs.append(batch_encs)
     all_encs = torch.cat(all_encs)
