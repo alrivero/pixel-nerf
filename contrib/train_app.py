@@ -306,6 +306,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             bounding_radius = util.bounding_sphere_radius(cam_rays).unsqueeze(0)
 
             rgb_gt_all = images_0to1
+            rgb_gt_all = rgb_gt_all[self.views[obj_idx]]
             rgb_gt_all = (
                 rgb_gt_all.permute(0, 2, 3, 1).contiguous().reshape(-1, 3)
             )  # (NV, H, W, 3)
@@ -317,8 +318,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             else:
                 pix_inds = torch.randint(0, int(args.nviews) * H * W, (args.ray_batch_size,))
 
-            rgb_gt = rgb_gt_all[self.views[obj_idx]]
-            rgb_gt = rgb_gt[pix_inds]  # (ray_batch_size, 3)
+            rgb_gt = rgb_gt_all[pix_inds]  # (ray_batch_size, 3)
             rays = cam_rays[self.views[obj_idx]]
             rays = cam_rays.view(-1, rays.shape[-1])[pix_inds].to(
                 device=device
