@@ -218,6 +218,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         # If we are, that means we're using a background and patch loss
         if self.app_enc_on:
             self.appearance_img = dset_app[args.app_set_ind][args.app_ind].unsqueeze(0).to(device=device)
+            C, Ha, Wa = self.appearance_img.shape
+            self.appearance_img = self.appearance_img.expand(SB, C, Ha, Wa)
 
             self.patch_dim = args.patch_dim
             self.patch_batch_size = args.patch_batch_size
