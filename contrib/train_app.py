@@ -400,7 +400,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
     def encode_back_patch(self):
         P = self.patch_dim
         back_patch = util.get_random_patch(self.appearance_img, P, P)
-        back_patch = F.interpolate(back_patch, size=self.ssh_dim, mode="area")
+        back_patch = F.interpolate(back_patch, size=self.ssh_dim, mode="bilinear")
         self.ref_app_crit.encode_targets(back_patch)
 
     def reg_pass(self, all_rays):

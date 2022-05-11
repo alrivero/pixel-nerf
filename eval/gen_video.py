@@ -20,6 +20,8 @@ from model import make_model
 from scipy.interpolate import CubicSpline
 import tqdm
 from data.AppearanceDataset import AppearanceDataset
+from contrib.model.unet_tile_se_norm import StyleEncoder
+from torch.nn import ZeroPad2d
 
 
 def extra_args(parser):
@@ -70,6 +72,9 @@ def extra_args(parser):
     )
     parser.add_argument(
         "--app_ind", "-IM", type=int, default=0, help="Index of image to be used for appearance harmonization"
+    )
+    parser.add_argument(
+        "--refencdir", "-DRE", type=str, default=None, help="Reference encoder directory (used for loss)"
     )
     return parser
 
@@ -126,6 +131,10 @@ render_par = renderer.bind_parallel(net, args.gpu_id, simple_output=True).eval()
 # Get the distance from camera to origin
 z_near = dset.z_near
 z_far = dset.z_far
+
+# Reference encoder used across network
+ref_encoder = StyleEncoder(4, 3, 32, 512, norm="BN", activ="relu", pad_type='reflect').to(device=device)
+ref_encoder.load_state_dict(torch.load(args.refencdir))
 
 print("Generating rays")
 
@@ -204,7 +213,7 @@ render_rays = util.gen_rays(
 ).to(device=device)
 # (NV, H, W, 8)
 
-bounding_radius = util.bounding_sphere_radius(render_rays).unsqueeze(0)
+bounding_radius = torch.tensor(args.radius).to(device=device)
 
 focal = focal.to(device=device)
 
@@ -234,17 +243,59 @@ with torch.no_grad():
 
     print("Rendering", args.num_views * H * W, "rays")
     all_rgb_fine = []
+    all_rgb_env = []
     for rays in tqdm.tqdm(
         torch.split(render_rays.view(-1, 8), args.ray_batch_size, dim=0)
     ):
-        rgb_env = util.sample_spherical_rgb(rays[None], bounding_radius, app_imgs)
-        rgb, _depth = render_par(rays[None], rgb_env)
+        B, _ = rays.shape
+        uv_env = util.sample_spherical_uv(rays[None], bounding_radius, app_imgs, 223)
+
+        # Some pixels might be really close together and use the same encoding
+        uv_env = torch.cat(uv_env, dim=-1).reshape(-1, 2)
+        unique_uv, inv_map = uv_env.unique(dim=0, return_inverse=True)
+        unq_u = unique_uv[:, 0]
+        unq_v = unique_uv[:, 1]
+        unq_patches = util.uv_to_rgb_patches(app_imgs, (unq_u, unq_v), 223)
+        unq_encs = ref_encoder(unq_patches)
+        all_encs = torch.zeros(B, 512)
+
+        # Render out our scene using these encodings per ray
+        all_encs[inv_map] = unq_encs[inv_map]
+        rgb, _ = render_par(rays[None], all_encs[None])
+
+        # Save the general area we ended up harmonizing with
+        offset = 223 // 2
+        u_max = unq_u.max() + offset
+        u_min = unq_u.min() + offset
+        v_max = unq_v.max() + offset
+        v_min = unq_v.min() + offset
+
+        harm_area = app_imgs[:, :, v_min:v_max, u_min:u_max]
+
+        # Resize the harmonized area to better fit in video frame
+        _, _, Ha, Wa = harm_area.shape
+        ratio_h = H / Ha
+        ratio_w = W / Wa
+        resize_ratio = min(ratio_h, ratio_w)
+
+        Hr = int(Ha * resize_ratio)
+        Wr = int(Wa * resize_ratio)
+        harm_area = F.interpolate(harm_area, size=(Ha, Wa), mode="bilinear")
+
+        # Pad if necessary
+        pad_h = max(H - Hr, 0)
+        pad_w = max(W - Wr, 0)
+        zero_pad = ZeroPad2d((0, pad_w, pad_h, 0))
+        harm_area = zero_pad(harm_area)
+
         all_rgb_fine.append(rgb[0])
+        all_rgb_env.append(harm_area)
     _depth = None
+
     rgb_fine = torch.cat(all_rgb_fine)
     # rgb_fine (V*H*W, 3)
-
-    frames = rgb_fine.view(-1, H, W, 3)
+    rgb_env = torch.cat(all_rgb_env)
+    frames = torch.cat((rgb_fine.view(-1, H, W, 3), rgb_env), dim=-1)
 
 print("Writing video")
 vid_name = "{:04}".format(args.subset)

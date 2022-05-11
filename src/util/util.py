@@ -671,6 +671,11 @@ def sample_spherical_harm_patch(rays, radii, app_imgs, patch_size):
     harm_patch = mean_uv_to_harm_patch(app_imgs, mean_uv, patch_size)
     return harm_patch
 
+def sample_spherical_uv(rays, radii, app_imgs, patch_size):
+    sph_intersects = sphere_intersection(rays, radii)
+    uv_env = spherical_intersection_to_map_proj(app_imgs, sph_intersects, radii, patch_size)
+    return uv_env
+
 def sphere_intersection(rays, radii):
     SB, B, _ = rays.shape
     cam_pos = rays[:, :, [0, 1, 2]]
