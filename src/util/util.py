@@ -672,7 +672,7 @@ def sample_spherical_harm_patch(rays, radii, app_imgs, patch_size):
     return harm_patch
 
 def sphere_intersection(rays, radii):
-    _, B, _ = rays.shape
+    SB, B, _ = rays.shape
     cam_pos = rays[:, :, [0, 1, 2]]
     cam_dir = rays[:, :, [3, 4, 5]]
     cam_pos_dist = torch.norm(cam_pos, p=2, dim=2)
@@ -681,7 +681,7 @@ def sphere_intersection(rays, radii):
     cam_pos_proj_len = torch.abs((cam_pos * cam_dir).sum(dim=2))
     dist_proj_cent = torch.sqrt(torch.clamp((cam_pos_dist ** 2) - (cam_pos_proj_len ** 2), min=0.0))
 
-    radii = radii.expand(1, B)
+    radii = radii.expand(SB, B)
     dist_intersect = torch.sqrt((radii ** 2) - (dist_proj_cent ** 2))
     t = cam_pos_proj_len - dist_intersect
     t = t.unsqueeze(2)
