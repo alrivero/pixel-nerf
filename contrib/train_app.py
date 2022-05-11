@@ -317,7 +317,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             else:
                 pix_inds = torch.randint(0, int(args.nviews) * H * W, (args.ray_batch_size,))
 
-            rgb_gt = rgb_gt[self.views[obj_idx]]
+            rgb_gt = rgb_gt_all[self.views[obj_idx]]
             rgb_gt = rgb_gt[pix_inds]  # (ray_batch_size, 3)
             rays = cam_rays[self.views[obj_idx]]
             rays = cam_rays.view(-1, rays.shape[-1])[pix_inds].to(
