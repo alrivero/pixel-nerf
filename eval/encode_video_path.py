@@ -57,7 +57,13 @@ def extra_args(parser):
         help="Distance of camera from origin, default is average of z_far, z_near of dataset (only for non-DTU)",
     )
     parser.add_argument("--fps", type=int, default=30, help="FPS of video")
-
+    parser.add_argument(
+        "--appearance_format",
+        "-FA",
+        type=str,
+        default=None,
+        help="Appearance format, eth3d (only for now)",
+    )
     parser.add_argument(
         "--appdir", "-DA", type=str, default=None, help="Appearance Dataset directory"
     )
