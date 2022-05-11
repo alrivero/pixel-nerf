@@ -293,7 +293,7 @@ with torch.no_grad():
         pad_h = max(H - Ha, 0)
         pad_w = max(W - Wa, 0)
         zero_pad = ZeroPad2d((0, pad_w, pad_h, 0))
-        harm_area = zero_pad(harm_area)
+        harm_area = zero_pad(harm_area).permute(0, 2, 3, 1)
 
         # Draw a bounding box across the harmonized area in the original image.
         # NOTE: On an old version of pytorch. Not easy to draw bounding box...
@@ -308,10 +308,10 @@ with torch.no_grad():
         He = int(He * resize_ratio)
         We = int(We * resize_ratio)
         app_imgs_down = F.interpolate(app_imgs, size=(He, We), mode="bilinear")
-        app_imgs_down = app_imgs_down[None].permute(0, 2, 3, 1)
+        app_imgs_down = app_imgs_down.permute(0, 2, 3, 1)
 
         all_rgb_fine.append(rgb[0])
-        all_rgb_env.append(harm_area.permute(0, 2, 3, 1))
+        all_rgb_env.append(harm_area)
         all_app_imgs.append(app_imgs_down)
 
     _depth = None
