@@ -296,12 +296,9 @@ with torch.no_grad():
         harm_area = zero_pad(harm_area).permute(0, 2, 3, 1)
 
         # Draw a bounding box across the harmonized area in the original image.
-        # NOTE: On an old version of pytorch. Not easy to draw bounding box...
+        # NOTE: On an old version of pytorch. Can't draw bounding box...
         app_imgs_down = util.ssh_denormalization(app_imgs)
-        app_imgs_down[:, 0, v_min:v_max, u_min] = 1.0
-        app_imgs_down[:, 0, v_min, u_min:u_max] = 1.0
-        app_imgs_down[:, 0, v_min:v_max, u_max] = 1.0
-        app_imgs_down[:, 0, v_max, u_min:u_max] = 1.0
+        app_imgs_down[:, 0, v_min:v_max, u_min:u_max] = 1.0
         
         _, _, He, We = app_imgs.shape
         resize_ratio = (W * 2) / We
