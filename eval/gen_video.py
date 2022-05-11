@@ -23,6 +23,7 @@ from data.AppearanceDataset import AppearanceDataset
 from contrib.model.unet_tile_se_norm import StyleEncoder
 from torch.nn import ZeroPad2d
 from contrib import debug
+from contrib.model import PatchEncoder
 
 
 def extra_args(parser):
@@ -134,8 +135,9 @@ z_near = dset.z_near
 z_far = dset.z_far
 
 # Reference encoder used across network
-ref_encoder = StyleEncoder(4, 3, 32, 512, norm="BN", activ="relu", pad_type='reflect').to(device=device)
+ref_encoder = StyleEncoder(4, 3, 32, 512, norm="BN", activ="relu", pad_type='reflect')
 ref_encoder.load_state_dict(torch.load(args.refencdir))
+patch_encoder = PatchEncoder(ref_encoder).to(device=device)
 
 print("Generating rays")
 
@@ -257,7 +259,7 @@ with torch.no_grad():
         unq_u = unique_uv[:, 0].reshape(1, -1, 1)
         unq_v = unique_uv[:, 1].reshape(1, -1, 1)
         unq_patches = util.uv_to_rgb_patches(app_imgs, (unq_u, unq_v), 223)
-        unq_encs = ref_encoder(unq_patches)
+        unq_encs = patch_encoder(unq_patches)
         all_encs = torch.zeros(B, 512)
 
         # Render out our scene using these encodings per ray
