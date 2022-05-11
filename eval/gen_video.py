@@ -274,6 +274,7 @@ with torch.no_grad():
         v_min = unq_v.min() + offset
 
         harm_area = app_imgs[:, :, v_min:v_max, u_min:u_max]
+        harm_area = util.ssh_denormalization(harm_area)
 
         # Resize the harmonized area to better fit in video frame
         _, _, Ha, Wa = harm_area.shape

@@ -545,6 +545,9 @@ def get_module(net):
 def ssh_normalization(img_tensor):
     return (img_tensor * 2.0) - 1.0 # normalization used for SSH encoder
 
+def ssh_denormalization(img_tensor):
+    return (img_tensor + 1.0) * 0.5
+
 def get_random_patch(t, Hp, Wp):
     H, W = t.shape[-2:]
     i = randint(0, H - Hp)
