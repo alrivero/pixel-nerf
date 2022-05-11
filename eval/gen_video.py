@@ -254,8 +254,8 @@ with torch.no_grad():
         # Some pixels might be really close together and use the same encoding
         uv_env = torch.cat(uv_env, dim=-1).reshape(-1, 2)
         unique_uv, inv_map = uv_env.unique(dim=0, return_inverse=True)
-        unq_u = unique_uv[:, 0]
-        unq_v = unique_uv[:, 1]
+        unq_u = unique_uv[:, 0].reshape(1, -1, 1)
+        unq_v = unique_uv[:, 1].reshape(1, -1, 1)
         unq_patches = util.uv_to_rgb_patches(app_imgs, (unq_u, unq_v), 223)
         unq_encs = ref_encoder(unq_patches)
         all_encs = torch.zeros(B, 512)
