@@ -24,6 +24,7 @@ from contrib.model.unet_tile_se_norm import StyleEncoder
 from torch.nn import ZeroPad2d
 from contrib import debug
 from contrib.model.PatchEncoder import PatchEncoder
+from torchvision.utils import draw_bounding_boxes
 
 
 def extra_args(parser):
@@ -249,6 +250,7 @@ with torch.no_grad():
     print("Rendering", args.num_views * H * W, "rays")
     all_rgb_fine = []
     all_rgb_env = []
+    all_app_imgs = []
     for rays in tqdm.tqdm(
         torch.split(render_rays.view(-1, 8), view_step, dim=0)
     ):
@@ -284,24 +286,41 @@ with torch.no_grad():
         ratio_w = W / Wa
         resize_ratio = min(ratio_h, ratio_w)
 
-        Hr = int(Ha * resize_ratio)
-        Wr = int(Wa * resize_ratio)
-        harm_area = F.interpolate(harm_area, size=(Hr, Wr), mode="bilinear")
+        Ha = int(Ha * resize_ratio)
+        Wa = int(Wa * resize_ratio)
+        harm_area = F.interpolate(harm_area, size=(Ha, Wa), mode="bilinear")
 
         # Pad if necessary
-        pad_h = max(H - Hr, 0)
-        pad_w = max(W - Wr, 0)
+        pad_h = max(H - Ha, 0)
+        pad_w = max(W - Wa, 0)
         zero_pad = ZeroPad2d((0, pad_w, pad_h, 0))
         harm_area = zero_pad(harm_area)
 
+        # Draw a bounding box across the harmonized area in the original image
+        _, _, He, We = app_imgs.shape
+        resize_ratio = (W * 2) / We
+        He = int(He * resize_ratio)
+        We = int(We * resize_ratio)
+        app_imgs_down = F.interpolate(app_imgs, size=(He, We), mode="bilinear")
+        app_imgs_down = util.ssh_denormalization(app_imgs_down)
+
+        bbox = [u_min, v_min, u_max, v_min]
+        bbox = torch.tensor(bbox, dtype=torch.int)
+        app_imgs_down = draw_bounding_boxes(app_imgs_down[0], width=3, colors=(255, 255, 0))
+        app_imgs_down = app_imgs_down[None].permute(0, 2, 3, 1)
+
         all_rgb_fine.append(rgb[0])
         all_rgb_env.append(harm_area.permute(0, 2, 3, 1))
+        all_app_imgs.append(app_imgs_down)
+
     _depth = None
 
-    rgb_fine = torch.cat(all_rgb_fine)
-    # rgb_fine (V*H*W, 3)
+    rgb_fine = torch.cat(all_rgb_fine)  # rgb_fine (V*H*W, 3)
     rgb_env = torch.cat(all_rgb_env)
+    rgb_imgs = torch.cat(all_app_imgs)
+
     frames = torch.cat((rgb_fine.view(-1, H, W, 3), rgb_env), dim=-2)
+    frames = torch.cat((frames, rgb_imgs), dim=-3)
 
 print("Writing video")
 vid_name = "{:04}".format(args.subset)
