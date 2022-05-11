@@ -24,7 +24,6 @@ from contrib.model.unet_tile_se_norm import StyleEncoder
 from torch.nn import ZeroPad2d
 from contrib import debug
 from contrib.model.PatchEncoder import PatchEncoder
-from torchvision.utils import draw_bounding_boxes
 
 
 def extra_args(parser):
@@ -296,17 +295,19 @@ with torch.no_grad():
         zero_pad = ZeroPad2d((0, pad_w, pad_h, 0))
         harm_area = zero_pad(harm_area)
 
-        # Draw a bounding box across the harmonized area in the original image
+        # Draw a bounding box across the harmonized area in the original image.
+        # NOTE: On an old version of pytorch. Not easy to draw bounding box...
+        app_imgs_down = util.ssh_denormalization(app_imgs)
+        app_imgs_down[:, 0, v_min:v_max, u_min] = 1.0
+        app_imgs_down[:, 0, v_min, u_min:u_max] = 1.0
+        app_imgs_down[:, 0, v_min:v_max, u_max] = 1.0
+        app_imgs_down[:, 0, v_max, u_min:u_max] = 1.0
+        
         _, _, He, We = app_imgs.shape
         resize_ratio = (W * 2) / We
         He = int(He * resize_ratio)
         We = int(We * resize_ratio)
         app_imgs_down = F.interpolate(app_imgs, size=(He, We), mode="bilinear")
-        app_imgs_down = util.ssh_denormalization(app_imgs_down)
-
-        bbox = [u_min, v_min, u_max, v_min]
-        bbox = torch.tensor(bbox, dtype=torch.int)
-        app_imgs_down = draw_bounding_boxes(app_imgs_down[0], width=3, colors=(255, 255, 0))
         app_imgs_down = app_imgs_down[None].permute(0, 2, 3, 1)
 
         all_rgb_fine.append(rgb[0])
