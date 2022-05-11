@@ -310,15 +310,17 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 rgb_gt_all.permute(0, 2, 3, 1).contiguous().reshape(-1, 3)
             )  # (NV, H, W, 3)
 
+
             if all_bboxes is not None:
                 pix = util.bbox_sample(bboxes, args.ray_batch_size)
                 pix_inds = pix[..., 0] * H * W + pix[..., 1] * W + pix[..., 2]
             else:
                 pix_inds = torch.randint(0, int(args.nviews) * H * W, (args.ray_batch_size,))
 
-            rgb_gt = rgb_gt_all[pix_inds]  # (ray_batch_size, 3)
-            cam_rays = cam_rays[self.views[obj_idx]]
-            rays = cam_rays.view(-1, cam_rays.shape[-1])[pix_inds].to(
+            rgb_gt = rgb_gt[self.views[obj_idx]]
+            rgb_gt = rgb_gt[pix_inds]  # (ray_batch_size, 3)
+            rays = cam_rays[self.views[obj_idx]]
+            rays = cam_rays.view(-1, rays.shape[-1])[pix_inds].to(
                 device=device
             )  # (ray_batch_size, 8)
 
@@ -371,8 +373,10 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             i = randint(0, H - P)
             j = randint(0, W - P)
 
-            rgb_gt = crop(rgb_gt_all, i, j, P, P)
-            rays = crop(cam_rays, i, j, P, P)
+            rgb_gt = rgb_gt_all[self.views[obj_idx]].permute(0, 3, 1, 2)
+            rgb_gt = crop(rgb_gt, i, j, P, P)
+            rays = cam_rays[self.views[obj_idx]]
+            rays = crop(rays, i, j, P, P)
 
             all_rgb_gt.append(rgb_gt)
             all_rays.append(rays)
@@ -382,8 +386,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         all_rays = torch.stack(all_rays)  # (SB, ray_batch_size, 8)
         all_radii = torch.stack(all_radii)
 
-
-        all_rays = util.batched_index_select_nd(all_rays, self.views)
+        image_ord = torch.randint(0, int(args.nviews), (int(args.nviews), 1)).to(device=device)
+        all_rays = util.batched_index_select_nd(all_rays, image_ord)
         all_rays = all_rays.permute(0, 1, 3, 4, 2).reshape(SB, -1, 8)
         all_rgb_gt = util.batched_index_select_nd(all_rgb_gt, self.views).reshape(SB, -1, 3)
 
