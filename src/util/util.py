@@ -709,6 +709,7 @@ def spherical_intersection_to_map_proj(map, intersections, radii, patch_size):
 
 def spherical_intersection_to_mean_map_proj(map, intersections, radii, patch_size):
     H, W = map.shape[2:4]
+    radii = radii.flatten()
 
     # Adjust the usable range of H, W
     H -= patch_size
