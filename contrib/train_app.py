@@ -213,7 +213,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         self.calc_losses = self.calc_losses_app if self.app_enc_on else self.calc_losses_no_app
 
         self.views = torch.arange(0, NV, step=(NV // int(args.nviews)))
-        self.views = self.views.unsqueeze(0).expand(SB, -1)
+        self.views = self.views.unsqueeze(0).expand(SB, -1).to(device=device)
 
         # If we are, that means we're using a background and patch loss
         if self.app_enc_on:
