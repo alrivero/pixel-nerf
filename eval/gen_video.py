@@ -304,7 +304,7 @@ with torch.no_grad():
         resize_ratio = (W * 2) / We
         He = int(He * resize_ratio)
         We = int(We * resize_ratio)
-        app_imgs_down = F.interpolate(app_imgs, size=(He, We), mode="bilinear")
+        app_imgs_down = F.interpolate(app_imgs_down, size=(He, We), mode="bilinear")
         app_imgs_down = app_imgs_down.permute(0, 2, 3, 1)
 
         all_rgb_fine.append(rgb[0])
