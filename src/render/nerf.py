@@ -65,7 +65,7 @@ class NeRFRenderer(torch.nn.Module):
         n_fine_depth=0,
         noise_std=0.0,
         depth_std=0.01,
-        eval_batch_size=80000,
+        eval_batch_size=100000,
         white_bkgd=False,
         lindisp=False,
         sched=None,  # ray sampling schedule for coarse and fine rays
