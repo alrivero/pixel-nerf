@@ -539,11 +539,11 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         patch_encs = patch_encs.reshape(SB, B, 512)
 
         # Get a patch to harmonize with
-        offset = 223 // 2
+        offset = 223
         u_max = unq_u.max() + offset
-        u_min = unq_u.min() + offset
+        u_min = unq_u.min()
         v_max = unq_v.max() + offset
-        v_min = unq_v.min() + offset
+        v_min = unq_v.min()
         patch_harm_patch = app_data[:, :, v_min:v_max, u_min:u_max]
 
         # NOTE: IF THIS WORKS, FIX SB

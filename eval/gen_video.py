@@ -270,11 +270,10 @@ with torch.no_grad():
         rgb, _ = render_par(rays[None], all_encs[None])
 
         # Save the general area we ended up harmonizing with
-        offset = 223 // 2
-        u_max = unq_u.max() + offset
-        u_min = unq_u.min() + offset
-        v_max = unq_v.max() + offset
-        v_min = unq_v.min() + offset
+        u_max = unq_u.max() + 223
+        u_min = unq_u.min()
+        v_max = unq_v.max() + 223
+        v_min = unq_v.min()
 
         harm_area = app_imgs[:, :, v_min:v_max, u_min:u_max]
         harm_area = util.ssh_denormalization(harm_area)
