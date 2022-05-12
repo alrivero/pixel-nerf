@@ -525,8 +525,17 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         patch_rays, _, patch_radii = self.patch_rays(data)
         B = patch_rays.shape[1]
 
-        patch_harm_patch = util.sample_spherical_harm_patch(patch_rays, patch_radii, app_data, self.ssh_HW - 1)
-        patch_harm_encs = self.patch_encoder(patch_harm_patch).detach().reshape(SB, 1, -1).expand(SB, B, -1)
+        # Some pixels might be really close together and use the same encoding
+        patch_uv = util.sample_spherical_uv(patch_rays, patch_radii, app_data, 223)
+        patch_uv = torch.cat(patch_uv, dim=-1).reshape(-1, 2)
+        unique_uv, inv_map = patch_uv.unique(dim=0, return_inverse=True)
+        unq_u = unique_uv[:, 0].reshape(1, -1, 1)
+        unq_v = unique_uv[:, 1].reshape(1, -1, 1)
+        unq_patches = util.uv_to_rgb_patches(app_data, (unq_u, unq_v), 223)
+        unq_encs = self.patch_encoder(unq_patches)
+        patch_encs = torch.zeros(SB * B, 512).to(device=device)
+        patch_encs[inv_map] = unq_encs[inv_map]
+        patch_encs.reshape(SB, B, 512)
 
         # These are a lot of rays. Decompose them into render batches and render
         batch_step = B // self.patch_batch_size
@@ -540,7 +549,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 b_end += remaining
 
             batch_rays = patch_rays[:, b_start:b_end, :]
-            batch_rgb_enc = patch_harm_encs[:, b_start:b_end, :]
+            batch_rgb_enc = patch_encs[:, b_start:b_end, :]
             patch_render_out.append(self.app_pass(batch_rays, batch_rgb_enc))
 
         # Compute our appearance loss using our appearance encoder and these subpatches
@@ -611,16 +620,24 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 focal.to(device=device),
                 c=c.to(device=device) if c is not None else None,
             )
+            test_rays = test_rays.reshape(1, H * W, -1)
             if self.app_enc_on:
                 bounding_radius = util.bounding_sphere_radius(cam_rays).unsqueeze(0)
-                test_rays = test_rays.reshape(1, H * W, -1)
-                uv_env = util.sample_spherical_uv(test_rays, bounding_radius, app_data, self.patch_dim)
-                rgb_env = util.uv_to_rgb_patches(app_data, uv_env, self.patch_dim)
-                rgb_env = F.interpolate(rgb_env, size=self.ssh_dim, mode="area")
-                rgb_enc = self.patch_encoder(rgb_env).reshape(1, H * W, -1).detach()
-                render_dict = self.app_pass(test_rays, rgb_enc)
+
+                # Some pixels might be really close together and use the same encoding
+                uv_env = util.sample_spherical_uv(test_rays, bounding_radius, app_data, 223)
+                uv_env = torch.cat(uv_env, dim=-1).reshape(-1, 2)
+                unique_uv, inv_map = uv_env.unique(dim=0, return_inverse=True)
+                unq_u = unique_uv[:, 0].reshape(1, -1, 1)
+                unq_v = unique_uv[:, 1].reshape(1, -1, 1)
+                unq_patches = util.uv_to_rgb_patches(app_data, (unq_u, unq_v), 223)
+                unq_encs = self.patch_encoder(unq_patches)
+                all_encs = torch.zeros(H * W, 512).to(device=device)
+                all_encs[inv_map] = unq_encs[inv_map]
+                all_encs.reshape(1, H * W, -1)
+
+                render_dict = self.app_pass(test_rays, all_encs)
             else:
-                test_rays = test_rays.reshape(1, H * W, -1)
                 render_dict = self.reg_pass(test_rays)
             coarse = render_dict.coarse
             fine = render_dict.fine
