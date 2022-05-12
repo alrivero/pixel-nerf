@@ -443,6 +443,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
     def app_loss(self, src_images, patch_dicts, harm_patch, loss_dict):
         SB, _, D, H, W = src_images.shape
+        _, _, _, Hh, Wh = harm_patch.shape
         P = self.patch_dim
 
         # Recompose our coarse and fine output. Going to assume fine is used. If an issue, change.
@@ -453,12 +454,10 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             fine_app_rgb.append(render_dict.fine.rgb.permute(0, 2, 1))
 
         coarse_app_rgb = torch.cat(coarse_app_rgb, dim=-1).reshape(SB, 3, P, P)
-        coarse_app_rgb = F.interpolate(coarse_app_rgb, size=self.ssh_dim, mode="bilinear")
+        coarse_app_rgb = F.interpolate(coarse_app_rgb, size=(Hh, Wh), mode="bilinear")
 
         fine_app_rgb = torch.cat(fine_app_rgb, dim=-1).reshape(SB, 3, P, P)
-        fine_app_rgb = F.interpolate(fine_app_rgb, size=self.ssh_dim, mode="bilinear")
-
-        harm_patch = F.interpolate(harm_patch, size=self.ssh_dim, mode="bilinear")
+        fine_app_rgb = F.interpolate(fine_app_rgb, size=(Hh, Wh), mode="bilinear")
 
         coarse_app_rgb = util.ssh_normalization(coarse_app_rgb)
         ref_app_loss = self.ref_app_crit(coarse_app_rgb, harm_patch) * self.lambda_ref_coarse
