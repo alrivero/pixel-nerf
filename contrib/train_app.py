@@ -537,6 +537,16 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         patch_encs[inv_map] = unq_encs[inv_map]
         patch_encs = patch_encs.reshape(SB, B, 512)
 
+        # Get a patch to harmonize with
+        offset = 223 // 2
+        u_max = unq_u.max() + offset
+        u_min = unq_u.min() + offset
+        v_max = unq_v.max() + offset
+        v_min = unq_v.min() + offset
+        patch_harm_patch = app_data[:, :, v_min:v_max, u_min:u_max]
+
+        # NOTE: IF THIS WORKS, FIX SB
+
         # These are a lot of rays. Decompose them into render batches and render
         batch_step = B // self.patch_batch_size
         remaining = B % batch_step
