@@ -443,7 +443,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
     def app_loss(self, src_images, patch_dicts, harm_patch, loss_dict):
         SB, _, D, H, W = src_images.shape
-        _, _, _, Hh, Wh = harm_patch.shape
+        _, _, Hh, Wh = harm_patch.shape
         P = self.patch_dim
 
         # Recompose our coarse and fine output. Going to assume fine is used. If an issue, change.
