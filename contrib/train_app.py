@@ -458,6 +458,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         fine_app_rgb = torch.cat(fine_app_rgb, dim=-1).reshape(SB, 3, P, P)
         fine_app_rgb = F.interpolate(fine_app_rgb, size=self.ssh_dim, mode="bilinear")
 
+        harm_patch = F.interpolate(harm_patch, size=self.ssh_dim, mode="bilinear")
+
         coarse_app_rgb = util.ssh_normalization(coarse_app_rgb)
         ref_app_loss = self.ref_app_crit(coarse_app_rgb, harm_patch) * self.lambda_ref_coarse
         loss_dict["rec"] = ref_app_loss.item()
