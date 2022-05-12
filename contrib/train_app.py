@@ -535,7 +535,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         unq_encs = self.patch_encoder(unq_patches)
         patch_encs = torch.zeros(SB * B, 512).to(device=device)
         patch_encs[inv_map] = unq_encs[inv_map]
-        patch_encs.reshape(SB, B, 512)
+        patch_encs = patch_encs.reshape(SB, B, 512)
 
         # These are a lot of rays. Decompose them into render batches and render
         batch_step = B // self.patch_batch_size
@@ -634,7 +634,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 unq_encs = self.patch_encoder(unq_patches)
                 all_encs = torch.zeros(H * W, 512).to(device=device)
                 all_encs[inv_map] = unq_encs[inv_map]
-                all_encs.reshape(1, H * W, -1)
+                all_encs = all_encs.reshape(1, H * W, -1)
 
                 render_dict = self.app_pass(test_rays, all_encs)
             else:
