@@ -262,7 +262,7 @@ with torch.no_grad():
     all_rgb_fine = []
     all_rgb_env = []
     all_app_imgs = []
-    curent_step = 0
+    current_step = 0
     for rays in tqdm.tqdm(
         torch.split(render_rays.view(-1, 8), batch_step, dim=0)
     ):
