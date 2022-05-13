@@ -712,8 +712,7 @@ def rays_blinn_newell_uv(intersections, app_imgs):
     return torch.cat((u, v), dim=-1)
 
 def uv_to_rgb_patches(app_imgs, uv_env, patch_size):
-    u = uv_env[:, :, 0]
-    v = uv_env[:, :, 1]
+    u, v = uv_env
 
     SB = app_imgs.shape[0]
     B = u.shape[1]
