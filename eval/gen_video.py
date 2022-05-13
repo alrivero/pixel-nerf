@@ -254,19 +254,18 @@ with torch.no_grad():
         torch.split(render_rays.view(-1, 8), view_step, dim=0)
     ):
         B, _ = rays.shape
-        uv_env = util.sample_spherical_uv(rays[None], bounding_radius, app_imgs)
 
         # Some pixels might be really close together and use the same encoding
-        uv_env = torch.cat(uv_env, dim=-1).reshape(-1, 2)
+        uv_env = util.sample_spherical_uv(rays[None], bounding_radius, app_imgs).reshape(-1, 2)
         unique_uv, inv_map = uv_env.unique(dim=0, return_inverse=True)
         unq_u = unique_uv[:, 0].reshape(1, -1, 1)
         unq_v = unique_uv[:, 1].reshape(1, -1, 1)
         unq_patches = util.uv_to_rgb_patches(app_imgs, (unq_u, unq_v), 223)
         unq_encs = patch_encoder(unq_patches)
         all_encs = torch.zeros(B, 512).to(device=device)
+        all_encs[inv_map] = unq_encs[inv_map]
 
         # Render out our scene using these encodings per ray
-        all_encs[inv_map] = unq_encs[inv_map]
         rgb, _ = render_par(rays[None], all_encs[None])
 
         # Save the general area we ended up harmonizing with
