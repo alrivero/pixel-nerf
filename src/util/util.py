@@ -701,9 +701,9 @@ def rays_blinn_newell_uv(intersections, app_imgs):
     H, W = app_imgs.shape[2:4]
 
     cam_pos_norm = normalize(intersections)
-    x = cam_pos_norm[:, :, 0]
-    y = cam_pos_norm[:, :, 1]
-    z = cam_pos_norm[:, :, 2]
+    x = cam_pos_norm[:, :, [0]]
+    y = cam_pos_norm[:, :, [1]]
+    z = cam_pos_norm[:, :, [2]]
 
     azimuth = (torch.atan2(z, x) + (2.0 * pi)) % (2.0 * pi)
     u = (W * (azimuth / (2 * pi))).long()
