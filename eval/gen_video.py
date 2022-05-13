@@ -79,7 +79,11 @@ def extra_args(parser):
         "--refencdir", "-DRE", type=str, default=None, help="Reference encoder directory (used for loss)"
     )
     parser.add_argument(
-        "--batch_size", "-BS", type=str, default=None, help="Batch size used per frame (resolution needs to be divisible by it)"
+        "--batch_size",
+        "-BS",
+        type=int,
+        default=1,
+        help="Batch size used per frame (resolution needs to be divisible by it)"
     )
     return parser
 
@@ -219,7 +223,6 @@ render_rays = util.gen_rays(
 # (NV, H, W, 8)
 
 bounding_radius = torch.tensor(args.radius).to(device=device)
-
 focal = focal.to(device=device)
 
 source = torch.tensor(list(map(int, args.source.split())), dtype=torch.long)
@@ -247,7 +250,7 @@ with torch.no_grad():
     )
 
     view_step = H * W
-    batch_step = view_step / args.batch_size
+    batch_step = view_step // args.batch_size
     uv_min_max = (
         torch.tensor(float("inf")),
         torch.tensor(float("-inf")),
