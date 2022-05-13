@@ -252,10 +252,10 @@ with torch.no_grad():
     view_step = H * W
     batch_step = view_step // args.batch_size
     uv_min_max = (
-        torch.tensor(float("inf")),
-        torch.tensor(float("-inf")),
-        torch.tensor(float("inf")),
-        torch.tensor(float("-inf")),
+        torch.tensor(W).long(),
+        torch.tensor(0).long(),
+        torch.tensor(H).long(),
+        torch.tensor(0).long(),
     )
 
     print("Rendering", args.num_views * H * W, "rays")
