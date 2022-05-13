@@ -742,16 +742,16 @@ def uv_to_bounding_patches(app_imgs, uv):
     return bound_patches
 
 def update_uv_min_max(unq_u, unq_v, uv_min_max, offset):
-    u_max = unq_u.max() + offset
     u_min = unq_u.min()
-    v_max = unq_v.max() + offset
+    u_max = unq_u.max() + offset
     v_min = unq_v.min()
+    v_max = unq_v.max() + offset
 
-    uv_min_max[0] = torch.min(u_min, uv_min_max[0]).long()
-    uv_min_max[1] = torch.max(u_max, uv_min_max[1]).long()
-    uv_min_max[2] = torch.min(v_min, uv_min_max[2]).long()
-    uv_min_max[3] = torch.max(v_max, uv_min_max[3]).long()
+    u_min = torch.min(u_min, uv_min_max[0])
+    u_max = torch.max(u_max, uv_min_max[1])
+    v_min = torch.min(v_min, uv_min_max[2])
+    v_max = torch.max(v_max, uv_min_max[3])
 
-    return uv_min_max
+    return (u_min, u_max, v_min, v_max)
 
 
