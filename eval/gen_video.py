@@ -252,10 +252,10 @@ with torch.no_grad():
     view_step = H * W
     batch_step = view_step // args.batch_size
     uv_min_max = (
-        torch.tensor(W).long(),
-        torch.tensor(0).long(),
-        torch.tensor(H).long(),
-        torch.tensor(0).long(),
+        torch.tensor(W).long().to(device=device),
+        torch.tensor(0).long().to(device=device),
+        torch.tensor(H).long().to(device=device),
+        torch.tensor(0).long().to(device=device),
     )
 
     print("Rendering", args.num_views * H * W, "rays")
@@ -317,6 +317,13 @@ with torch.no_grad():
 
             all_rgb_env.append(harm_area)
             all_app_imgs.append(app_imgs_down)
+
+            uv_min_max = (
+                torch.tensor(W).long().to(device=device),
+                torch.tensor(0).long().to(device=device),
+                torch.tensor(H).long().to(device=device),
+                torch.tensor(0).long().to(device=device),
+            )
         all_rgb_fine.append(rgb[0])
 
     _depth = None
