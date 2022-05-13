@@ -664,20 +664,20 @@ def bounding_sphere_radius(all_rays):
 
 def sample_spherical_enc_patches(rays, radii, app_imgs, patch_size):
     sph_intersects = sphere_intersection(rays, radii)
-    uv_env = spherical_intersection_to_map_proj(app_imgs, sph_intersects, radii, patch_size)
+    uv_env = rays_blinn_newell_uv(sph_intersects, app_imgs)
     enc_patches = uv_to_rgb_patches(app_imgs, uv_env, patch_size)
     return enc_patches
+
+def sample_spherical_uv(rays, radii, app_imgs):
+    sph_intersects = sphere_intersection(rays, radii)
+    uv_env = rays_blinn_newell_uv(sph_intersects, app_imgs)
+    return uv_env
 
 def sample_spherical_harm_patch(rays, radii, app_imgs, patch_size):
     sph_intersects = sphere_intersection(rays, radii)
     mean_uv = spherical_intersection_to_mean_map_proj(app_imgs, sph_intersects, radii, patch_size)
     harm_patch = mean_uv_to_harm_patch(app_imgs, mean_uv, patch_size)
     return harm_patch
-
-def sample_spherical_uv(rays, radii, app_imgs, patch_size):
-    sph_intersects = sphere_intersection(rays, radii)
-    uv_env = spherical_intersection_to_map_proj(app_imgs, sph_intersects, radii, patch_size)
-    return uv_env
 
 def sphere_intersection(rays, radii):
     SB, B, _ = rays.shape
@@ -696,96 +696,48 @@ def sphere_intersection(rays, radii):
 
     return cam_pos + cam_dir * t
 
-def spherical_intersection_to_map_proj(map, intersections, radii, patch_size):
+def rays_blinn_newell_uv(intersections, app_imgs):
     SB, B, _ = intersections.shape
-    H, W = map.shape[2:4]
-    radii = radii.expand(SB, B)
+    H, W = app_imgs.shape[2:4]
 
-    # Adjust the usable range of H, W
-    H -= patch_size
-    W -= patch_size
+    cam_pos_norm = normalize(intersections)
+    x = cam_pos_norm[:, :, 0]
+    y = cam_pos_norm[:, :, 1]
+    z = cam_pos_norm[:, :, 2]
 
-    x = intersections[:, :, 0]
-    y = intersections[:, :, 1]
-    z = intersections[:, :, 2]
     azimuth = (torch.atan2(z, x) + (2.0 * pi)) % (2.0 * pi)
-
     u = (W * (azimuth / (2 * pi))).long()
-    v = (H * (y + radii) / (2 * radii)).long()
+    v = (H * (torch.asin(-y) + (pi / 2)) / pi).long()   # Negative y since top-left is 0, 0
 
-    return u, v
-
-def spherical_intersection_to_mean_map_proj(map, intersections, radii, patch_size):
-    H, W = map.shape[2:4]
-    radii = radii.flatten()
-
-    # Adjust the usable range of H, W
-    H -= patch_size
-    W -= patch_size
-
-    x_mean = intersections[:, :, 0].mean(dim=1)
-    y_mean = intersections[:, :, 1].mean(dim=1)
-    z_mean = intersections[:, :, 2].mean(dim=1)
-    azimuth = (torch.atan2(z_mean, x_mean) + (2.0 * pi)) % (2.0 * pi)
-
-    u_mean = (W * (azimuth / (2 * pi))).long()
-    v_mean = (H * (y_mean + radii) / (2 * radii)).long()
-
-    return u_mean, v_mean
+    return torch.cat((u, v), dim=-1)
 
 def uv_to_rgb_patches(app_imgs, uv_env, patch_size):
-    u, v = uv_env
-    SB, _, _, _ = app_imgs.shape
+    u = uv_env[:, :, 0]
+    v = uv_env[:, :, 1]
+
+    SB = app_imgs.shape[0]
     B = u.shape[1]
     P = patch_size
 
     t = torch.arange(SB)
     t = repeat_interleave(t, B)
-
     u = u.flatten()
     v = v.flatten()
 
     app_imgs = app_imgs.unfold(2, P, 1).unfold(3, P, 1)
-
     return app_imgs[t, :, v, u, :, :]
 
-def mean_uv_to_harm_patch(app_imgs, mean_uv, patch_size):
-    u, v = mean_uv
+def uv_to_bounding_patches(app_imgs, uv):
     SB = app_imgs.shape[0]
-    P = patch_size
 
-    t = torch.arange(SB)
-    u = u.flatten()
-    v = v.flatten()
+    u_min = uv[:, 0].min(dim=1)[0]
+    u_max = uv[:, 0].max(dim=1)[0]
+    v_min = uv[:, 1].min(dim=1)[0]
+    v_max = uv[:, 1].max(dim=1)[0]
 
-    app_imgs = app_imgs.unfold(2, P, 1).unfold(3, P, 1)
-
-    return app_imgs[t, :, v, u, :, :]
-
-def patch_encode_image(patch_encoder, img, patch_size, batch_size, ssh_dim, enc_dim):
-    P = patch_size
-    SB, C, H, W = img.shape
-    img_unfolded = img.unfold(2, P, 1).unfold(3, P, 1)
-    img_unfolded = img_unfolded.reshape(SB, C, -1, P, P).permute(0, 2, 1, 3, 4).reshape(-1, C, P, P)
+    # Since SB is really small, this is ok
+    bound_patches = []
+    for i in range(SB):
+        bound_patches.append(app_imgs[i, :, v_min[i]:v_max[i], u_min[i]:u_max[i]])
     
-    # Making the assumption that the total number of patches is divisible by batch_size
-    h_step = H // batch_size
-    w_step = W // batch_size
-
-    encoded_img = []
-    for i in range(batch_size):
-        s_v = i * h_step
-        e_v = (i + 1) * h_step
-        for j in range(batch_size):
-            s_u = j * h_step
-            e_u = (j + 1) * h_step
-
-            patch_batch = img_unfolded[:, :, s_v:e_v, s_u:e_u, :, :]
-            patch_batch = patch_batch.reshape(SB, C, -1, P, P).permute(0, 2, 1, 3, 4).reshape(-1, C, P, P)
-            patch_batch = F.interpolate(patch_batch, size=ssh_dim, mode="bilinear")
-            encoded_img.append(patch_encoder(patch_batch))
-    
-    encoded_img = torch.cat(encoded_img, dim=0)
-    encoded_img.reshape(SB, H, W, enc_dim)
-
-    return encoded_img
+    return bound_patches
