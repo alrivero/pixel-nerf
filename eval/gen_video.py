@@ -78,6 +78,9 @@ def extra_args(parser):
     parser.add_argument(
         "--refencdir", "-DRE", type=str, default=None, help="Reference encoder directory (used for loss)"
     )
+    parser.add_argument(
+        "--batch_size", "-BS", type=str, default=None, help="Batch size used per frame (resolution needs to be divisible by it)"
+    )
     return parser
 
 
@@ -95,7 +98,6 @@ data_path = data["path"]
 print("Data instance loaded:", data_path)
 
 images = data["images"]  # (NV, 3, H, W)
-
 poses = data["poses"]  # (NV, 4, 4)
 focal = data["focal"]
 if isinstance(focal, float):
@@ -245,13 +247,21 @@ with torch.no_grad():
     )
 
     view_step = H * W
+    batch_step = view_step / args.batch_size
+    uv_min_max = (
+        torch.tensor(float("inf")),
+        torch.tensor(float("-inf")),
+        torch.tensor(float("inf")),
+        torch.tensor(float("-inf")),
+    )
 
     print("Rendering", args.num_views * H * W, "rays")
     all_rgb_fine = []
     all_rgb_env = []
     all_app_imgs = []
+    curent_step = 0
     for rays in tqdm.tqdm(
-        torch.split(render_rays.view(-1, 8), view_step, dim=0)
+        torch.split(render_rays.view(-1, 8), batch_step, dim=0)
     ):
         B, _ = rays.shape
 
@@ -268,46 +278,43 @@ with torch.no_grad():
         # Render out our scene using these encodings per ray
         rgb, _ = render_par(rays[None], all_encs[None])
 
-        # Save the general area we ended up harmonizing with
-        u_max = unq_u.max() + 223
-        u_min = unq_u.min()
-        v_max = unq_v.max() + 223
-        v_min = unq_v.min()
+        uv_min_max = util.update_uv_min_max(unq_u, unq_v, uv_min_max, 223)
+        current_step = (current_step + 1) % args.batch_size
+        if current_step == 0:
+            harm_area = app_imgs[:, :, uv_min_max[0]:uv_min_max[1], uv_min_max[2]:uv_min_max[3]]
+            harm_area = util.ssh_denormalization(harm_area)
 
-        harm_area = app_imgs[:, :, v_min:v_max, u_min:u_max]
-        harm_area = util.ssh_denormalization(harm_area)
+            # Resize the harmonized area to better fit in video frame
+            _, _, Ha, Wa = harm_area.shape
+            ratio_h = H / Ha
+            ratio_w = W / Wa
+            resize_ratio = min(ratio_h, ratio_w)
 
-        # Resize the harmonized area to better fit in video frame
-        _, _, Ha, Wa = harm_area.shape
-        ratio_h = H / Ha
-        ratio_w = W / Wa
-        resize_ratio = min(ratio_h, ratio_w)
+            Ha = int(Ha * resize_ratio)
+            Wa = int(Wa * resize_ratio)
+            harm_area = F.interpolate(harm_area, size=(Ha, Wa), mode="bilinear")
 
-        Ha = int(Ha * resize_ratio)
-        Wa = int(Wa * resize_ratio)
-        harm_area = F.interpolate(harm_area, size=(Ha, Wa), mode="bilinear")
+            # Pad if necessary
+            pad_h = max(H - Ha, 0)
+            pad_w = max(W - Wa, 0)
+            zero_pad = ZeroPad2d((0, pad_w, pad_h, 0))
+            harm_area = zero_pad(harm_area).permute(0, 2, 3, 1)
 
-        # Pad if necessary
-        pad_h = max(H - Ha, 0)
-        pad_w = max(W - Wa, 0)
-        zero_pad = ZeroPad2d((0, pad_w, pad_h, 0))
-        harm_area = zero_pad(harm_area).permute(0, 2, 3, 1)
+            # Draw a bounding box across the harmonized area in the original image.
+            # NOTE: On an old version of pytorch. Can't draw bounding box...
+            app_imgs_down = util.ssh_denormalization(app_imgs)
+            app_imgs_down[:, 0, uv_min_max[0]:uv_min_max[1], uv_min_max[2]:uv_min_max[3]] = 1.0
+            
+            _, _, He, We = app_imgs.shape
+            resize_ratio = (W * 2) / We
+            He = int(He * resize_ratio)
+            We = int(We * resize_ratio)
+            app_imgs_down = F.interpolate(app_imgs_down, size=(He, We), mode="bilinear")
+            app_imgs_down = app_imgs_down.permute(0, 2, 3, 1)
 
-        # Draw a bounding box across the harmonized area in the original image.
-        # NOTE: On an old version of pytorch. Can't draw bounding box...
-        app_imgs_down = util.ssh_denormalization(app_imgs)
-        app_imgs_down[:, 0, v_min:v_max, u_min:u_max] = 1.0
-        
-        _, _, He, We = app_imgs.shape
-        resize_ratio = (W * 2) / We
-        He = int(He * resize_ratio)
-        We = int(We * resize_ratio)
-        app_imgs_down = F.interpolate(app_imgs_down, size=(He, We), mode="bilinear")
-        app_imgs_down = app_imgs_down.permute(0, 2, 3, 1)
-
+            all_rgb_env.append(harm_area)
+            all_app_imgs.append(app_imgs_down)
         all_rgb_fine.append(rgb[0])
-        all_rgb_env.append(harm_area)
-        all_app_imgs.append(app_imgs_down)
 
     _depth = None
 
