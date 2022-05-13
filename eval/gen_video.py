@@ -254,7 +254,7 @@ with torch.no_grad():
         torch.split(render_rays.view(-1, 8), view_step, dim=0)
     ):
         B, _ = rays.shape
-        uv_env = util.sample_spherical_uv(rays[None], bounding_radius, app_imgs, 223)
+        uv_env = util.sample_spherical_uv(rays[None], bounding_radius, app_imgs)
 
         # Some pixels might be really close together and use the same encoding
         uv_env = torch.cat(uv_env, dim=-1).reshape(-1, 2)
