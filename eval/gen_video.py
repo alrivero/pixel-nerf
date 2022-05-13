@@ -252,9 +252,9 @@ with torch.no_grad():
     view_step = H * W
     batch_step = view_step // args.batch_size
     uv_min_max = (
-        torch.tensor(W).long().to(device=device),
+        torch.tensor(app_imgs.shape[-1]).long().to(device=device),
         torch.tensor(0).long().to(device=device),
-        torch.tensor(H).long().to(device=device),
+        torch.tensor(app_imgs.shape[-2]).long().to(device=device),
         torch.tensor(0).long().to(device=device),
     )
 
