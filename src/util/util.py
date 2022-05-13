@@ -671,7 +671,7 @@ def sample_spherical_enc_patches(rays, radii, app_imgs, patch_size):
 def sample_spherical_uv(rays, radii, app_imgs):
     sph_intersects = sphere_intersection(rays, radii)
     uv_env = rays_blinn_newell_uv(sph_intersects, app_imgs)
-    return uv_env
+    return torch.cat(uv_env, dim=-1)
 
 def sample_spherical_harm_patch(rays, radii, app_imgs, patch_size):
     sph_intersects = sphere_intersection(rays, radii)
@@ -709,7 +709,7 @@ def rays_blinn_newell_uv(intersections, app_imgs):
     u = (W * (azimuth / (2 * pi))).long()
     v = (H * (torch.asin(-y) + (pi / 2)) / pi).long()   # Negative y since top-left is 0, 0
 
-    return torch.cat((u, v), dim=-1)
+    return u, v
 
 def uv_to_rgb_patches(app_imgs, uv_env, patch_size):
     u, v = uv_env
