@@ -673,27 +673,23 @@ def sample_spherical_uv(rays, radii, app_imgs):
     uv_env = rays_blinn_newell_uv(sph_intersects, app_imgs)
     return torch.cat(uv_env, dim=-1)
 
-def sample_spherical_harm_patch(rays, radii, app_imgs, patch_size):
-    sph_intersects = sphere_intersection(rays, radii)
-    mean_uv = spherical_intersection_to_mean_map_proj(app_imgs, sph_intersects, radii, patch_size)
-    harm_patch = mean_uv_to_harm_patch(app_imgs, mean_uv, patch_size)
-    return harm_patch
-
 def sphere_intersection(rays, radii):
     SB, B, _ = rays.shape
     cam_pos = rays[:, :, [0, 1, 2]]
     cam_dir = rays[:, :, [3, 4, 5]]
-    cam_pos_dist = torch.norm(cam_pos, p=2, dim=2)
-
-    # Since our sphere center is at 0, 0, 0, calculations simplify
-    cam_pos_proj_len = torch.abs((cam_pos * cam_dir).sum(dim=2))
-    dist_proj_cent = torch.sqrt(torch.clamp((cam_pos_dist ** 2) - (cam_pos_proj_len ** 2), min=0.0))
 
     radii = radii.expand(SB, B)
-    dist_intersect = torch.sqrt((radii ** 2) - (dist_proj_cent ** 2))
-    t = cam_pos_proj_len - dist_intersect
-    t = t.unsqueeze(2)
 
+    cam_pos_proj = (cam_pos * cam_dir).sum(dim=2)
+    cam_pos_dist = (cam_pos * cam_pos).sum(dim=2) - (radii ** 2)
+    if torch.any(cam_pos_dist < 0.0) or torch.any(cam_pos_proj > 0.0):
+        return None
+    
+    discriminant = (cam_pos_proj ** 2) - cam_pos_dist
+    if torch.any(discriminant < 0.0):
+        return None
+    
+    t = torch.clamp(-cam_pos_proj - torch.sqrt(discriminant), min=0.0)
     return cam_pos + cam_dir * t
 
 def rays_blinn_newell_uv(intersections, app_imgs):
