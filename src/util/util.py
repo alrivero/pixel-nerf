@@ -682,7 +682,7 @@ def sphere_intersection(rays, radii):
 
     cam_pos_proj = (cam_pos * cam_dir).sum(dim=2)
     cam_pos_dist = (cam_pos * cam_pos).sum(dim=2) - (radii ** 2)
-    if torch.any(cam_pos_dist > 0.0) or torch.any(cam_pos_proj > 0.0):
+    if torch.any(cam_pos_dist < 0.0) or torch.any(cam_pos_proj > 0.0):
         return None
     
     discriminant = (cam_pos_proj ** 2) - cam_pos_dist
