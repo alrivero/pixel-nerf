@@ -111,6 +111,13 @@ def extra_args(parser):
         default=None,
         help="Skip the visualization steps of our scene",
     )
+    parser.add_argument(
+        "--radius",
+        "-RD"
+        type=float,
+        default=2.451,
+        help="Distance of camera from origin, default is average of z_far, z_near of dataset (only for non-DTU)",
+    )
     return parser
 
 
@@ -166,6 +173,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         self.lambda_coarse = conf.get_float("loss.lambda_coarse")
         self.lambda_fine = conf.get_float("loss.lambda_fine", 1.0)
+        self.lambda_coarse_og = conf.get_float("loss.lambda_coarse_og")
+        self.lambda_fine_og = conf.get_float("loss.lambda_fine_og", 1.0)
         print(
             "lambda coarse {} and fine {}".format(self.lambda_coarse, self.lambda_fine)
         )
@@ -441,34 +450,43 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         
         return density_app_loss
 
-    def app_loss(self, src_images, patch_dicts, harm_patch, loss_dict):
+    def app_loss(self, src_images, patch_dict, harm_patch, loss_dict):
         SB, _, D, H, W = src_images.shape
         _, _, Hh, Wh = harm_patch.shape
         P = self.patch_dim
 
         # Recompose our coarse and fine output. Going to assume fine is used. If an issue, change.
-        coarse_app_rgb = []
-        fine_app_rgb = []
-        for render_dict in patch_dicts:
-            coarse_app_rgb.append(render_dict.coarse.rgb.permute(0, 2, 1))
-            fine_app_rgb.append(render_dict.fine.rgb.permute(0, 2, 1))
+        coarse_app_rgb = patch_dict.coarse.rgb.reshape(SB, 3, P, P)
+        coarse_app_rgb = util.ssh_normalization(coarse_app_rgb)
+        coarse_app_rgb = F.interpolate(patch_dict, size=(Hh, Wh), mode="bilinear")
 
-        coarse_app_rgb = torch.cat(coarse_app_rgb, dim=-1).reshape(SB, 3, P, P)
-        coarse_app_rgb = F.interpolate(coarse_app_rgb, size=(Hh, Wh), mode="bilinear")
-
-        fine_app_rgb = torch.cat(fine_app_rgb, dim=-1).reshape(SB, 3, P, P)
+        fine_app_rgb = patch_dict.fine.rgb.reshape(SB, 3, P, P)
+        fine_app_rgb = util.ssh_normalization(fine_app_rgb)
         fine_app_rgb = F.interpolate(fine_app_rgb, size=(Hh, Wh), mode="bilinear")
 
-        coarse_app_rgb = util.ssh_normalization(coarse_app_rgb)
         ref_app_loss = self.ref_app_crit(coarse_app_rgb, harm_patch) * self.lambda_ref_coarse
         loss_dict["rec"] = ref_app_loss.item()
 
-        fine_app_rgb = util.ssh_normalization(fine_app_rgb)
         ref_app_loss_fine = self.ref_app_crit(fine_app_rgb, harm_patch) * self.lambda_ref_fine
         ref_app_loss += ref_app_loss_fine
         loss_dict["ref"] = ref_app_loss.item()
 
         return ref_app_loss
+
+    def og_loss(self, render_dict, all_rgb_gt, loss_dict):
+        # Compute our standard PixelNeRF loss
+        coarse = render_dict.coarse
+        fine = render_dict.fine
+        using_fine = len(fine) > 0
+
+        rgb_loss = self.rgb_coarse_crit(coarse.rgb, all_rgb_gt) * self.lambda_coarse_og
+        loss_dict["oc"] = rgb_loss.item()
+        if using_fine:
+            fine_loss = self.rgb_fine_crit(fine.rgb, all_rgb_gt) * self.lambda_fine_og
+            rgb_loss += fine_loss
+            loss_dict["of"] = fine_loss.item()
+        
+        return rgb_loss
 
     def calc_losses_no_app(self, data, app_data, is_train=True, global_step=0):
         # Establish the views we'll be using to train
@@ -503,7 +521,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         # Choose our standard randomly-smapled rays for our regular pass
         nerf_rays, nerf_rays_gt, nerf_radii = self.rand_rays(data, is_train, global_step)
         SB, B, _ = nerf_rays.shape
-
+        
+        nerf_radii = torch.full_like(nerf_radii, args.radius)
         nerf_enc_patches = util.sample_spherical_enc_patches(nerf_rays, nerf_radii, app_data, self.ssh_HW - 1)
         nerf_encs = self.patch_encoder(nerf_enc_patches).detach().reshape(SB, B, -1)
 
@@ -523,7 +542,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         reg_render_dict = app_render_dict = None
 
         # Choose rays corresponding to an image patch at our disposal
-        patch_rays, _, patch_radii = self.patch_rays(data)
+        patch_rays, patch_rays_gt, patch_radii = self.patch_rays(data)
+        patch_radii = torch.full_like(patch_radii, args.radius)
         B = patch_rays.shape[1]
 
         # Some pixels might be really close together and use the same encoding
@@ -561,12 +581,14 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             batch_rays = patch_rays[:, b_start:b_end, :]
             batch_rgb_enc = patch_encs[:, b_start:b_end, :]
             patch_render_out.append(self.app_pass(batch_rays, batch_rgb_enc))
+        patch_render_out = util.recompose_render_dicts(patch_render_out)
 
         # Compute our appearance loss using our appearance encoder and these subpatches
         app_loss = self.app_loss(src_images, patch_render_out, patch_harm_patch, loss_dict)
+        og_loss = self.og_loss(patch_render_out, patch_rays_gt, loss_dict)
 
         # Compute our standard NeRF loss
-        loss = nerf_loss + depth_loss + app_loss
+        loss = nerf_loss + depth_loss + app_loss + og_loss
         if is_train:
             loss.backward()
         loss_dict["t"] = loss.item()

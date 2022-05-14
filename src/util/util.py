@@ -11,9 +11,9 @@ import math
 import warnings
 from random import randint
 from torchvision.transforms.functional_tensor import crop
-# from dotmap import DotMap
 from math import pi
 from torch.nn.functional import normalize
+from dotmap import DotMap
 
 def image_float_to_uint8(img):
     """
@@ -749,5 +749,32 @@ def update_uv_min_max(unq_u, unq_v, uv_min_max, offset):
     v_max = torch.max(v_max, uv_min_max[3])
 
     return (u_min, u_max, v_min, v_max)
+
+def recompose_render_dicts(render_dicts):
+    coarse_rgb = []
+    coarse_depth = []
+    fine_rgb = []
+    fine_depth = []
+
+    for rend_dict in render_dicts:
+        coarse_rgb.append(rend_dict.coarse.rgb)
+        coarse_depth.append(rend_dict.coarse.depth)
+        fine_rgb.append(rend_dict.fine.rgb)
+        fine_depth.append(rend_dict.fine.depth)
+    coarse_rgb = torch.cat(coarse_rgb, dim=-1)
+    coarse_depth = torch.cat(coarse_depth, dim=-1)
+    fine_rgb = torch.cat(fine_rgb, dim=-1)
+    fine_depth = torch.cat(fine_depth, dim=-1)
+    
+    out_dict = DotMap()
+    out_dict.coarse = DotMap()
+    out_dict.fine = DotMap()
+
+    out_dict.coarse.rgb = coarse_rgb
+    out_dict.coarse.depth = coarse_depth
+    out_dict.fine.rgb = fine_rgb
+    out_dict.fine.depth = fine_depth
+
+    return out_dict
 
 
