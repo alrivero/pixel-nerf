@@ -113,7 +113,7 @@ def extra_args(parser):
     )
     parser.add_argument(
         "--radius",
-        "-RD"
+        "-RD",
         type=float,
         default=2.451,
         help="Distance of camera from origin, default is average of z_far, z_near of dataset (only for non-DTU)",
