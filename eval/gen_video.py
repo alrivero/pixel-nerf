@@ -24,7 +24,7 @@ from contrib.model.unet_tile_se_norm import StyleEncoder
 from torch.nn import ZeroPad2d
 from contrib import debug
 from contrib.model.PatchEncoder import PatchEncoder
-
+from math import ceil
 
 def extra_args(parser):
     parser.add_argument(
@@ -81,6 +81,13 @@ def extra_args(parser):
     parser.add_argument(
         "--batch_size",
         "-BS",
+        type=int,
+        default=1,
+        help="Batch size used per frame (resolution needs to be divisible by it)"
+    )
+    parser.add_argument(
+        "-patch_batch_size",
+        "-PB",
         type=int,
         default=1,
         help="Batch size used per frame (resolution needs to be divisible by it)"
@@ -274,6 +281,20 @@ with torch.no_grad():
         unq_u = unique_uv[:, 0].reshape(1, -1, 1)
         unq_v = unique_uv[:, 1].reshape(1, -1, 1)
         unq_patches = util.uv_to_rgb_patches(app_imgs, (unq_u, unq_v), 223)
+
+        # Process the encodings of our patches in batches
+        num_unq = unique_uv.shape[0]
+        unq_encs = []
+        while(num_unq > 0):
+            b_start = (i * args.patch_batch_size)
+            b_inc = min(num_unq, args.patch_batch_size)
+            b_end = b_start + b_inc
+            num_unq -= b_inc
+
+            batch_patches = unq_patches[b_start:b_end, :, :, :]
+            unq_encs.append(patch_encoder(batch_patches))
+        unq_encs = torch.cat(unq_encs)
+
         unq_encs = patch_encoder(unq_patches)
         all_encs = torch.zeros(B, 512).to(device=device)
         all_encs[inv_map] = unq_encs[inv_map]
