@@ -555,97 +555,6 @@ def get_random_patch(t, Hp, Wp):
 
     return crop(t, i, j, Hp, Wp)
 
-def decompose_to_subpatches(patch, sub_factor):
-    SB, _, C, _, _ = patch.shape
-    HWp = patch.shape[-1] // sub_factor
-
-    subpatches = []
-    for i in range(sub_factor):
-        row = []
-        for j in range(sub_factor):
-            row.append(crop(patch, HWp * i, HWp * j, HWp, HWp).permute(0, 1, 3, 4, 2).reshape(SB, -1, C))
-        subpatches.append(row)
-    
-    return subpatches
-
-def recompose_subpatch_render_dicts_depth(render_dicts, SB, P, sub_factor):
-    HWp = P // sub_factor
-    coarse = []
-    fine = []
-    for i in range(len(render_dicts[i])):
-        for j in range(len(render_dicts[i])):
-            coarse.append(render_dicts[i][j].coarse.depth.permute(0, 2, 1).reshape(SB, 3, HWp, HWp))
-            fine.append(render_dicts[i][j].fine.depth.permute(0, 2, 1).reshape(SB, 3, HWp, HWp))
-
-    patch_coarse_depth = torch.hstack(coarse)
-    patch_fine_depth = torch.hstack(fine)
-    
-    for i in range(len(1, render_dicts)):
-        coarse = []
-        fine = []
-        for j in range(len(render_dicts[i])):
-            coarse.append(render_dicts[i][j].coarse.depth.permute(0, 2, 1).reshape(SB, 3, HWp, HWp))
-            fine.append(render_dicts[i][j].fine.depth.permute(0, 2, 1).reshape(SB, 3, HWp, HWp))
-
-        patch_coarse_depth = torch.vstack([
-            patch_coarse_depth,
-            torch.hstack(coarse)
-        ])
-        patch_fine_depth = torch.vstack([
-            patch_fine_depth,
-            torch.hstack(coarse)
-        ])
-    
-    return patch_coarse_depth, patch_fine_depth
-
-def recompose_subpatch_rgb_env(subpatch_rgb_env, SB, P, sub_factor):
-    HWp = P // sub_factor
-    row = []
-
-    for j in range(len(subpatch_rgb_env[0])):
-        row.append(subpatch_rgb_env[0][j].permute(0, 2, 1).reshape(SB, 3, HWp, HWp))
-
-    out = torch.cat(row, dim=3)
-    
-    for i in range(1, len(subpatch_rgb_env)):
-        row = []
-        for j in range(len(subpatch_rgb_env[i])):
-            row.append(subpatch_rgb_env[i][j].permute(0, 2, 1).reshape(SB, 3, HWp, HWp))
-
-        out = torch.cat(
-            [out, torch.cat(row, dim=3)],
-            dim=2)
-    
-    return out
-
-def recompose_subpatch_render_dicts_rgb(render_dicts, SB, P, sub_factor):
-    HWp = P // sub_factor
-    coarse = []
-    fine = []
-
-    for j in range(len(render_dicts[0])):
-        coarse.append(render_dicts[0][j].coarse.rgb.permute(0, 2, 1).reshape(SB, 3, HWp, HWp))
-        fine.append(render_dicts[0][j].fine.rgb.permute(0, 2, 1).reshape(SB, 3, HWp, HWp))
-
-    patch_coarse_rgb = torch.cat(coarse, dim=3)
-    patch_fine_rgb = torch.cat(fine, dim=3)
-    
-    for i in range(1, len(render_dicts)):
-        coarse = []
-        fine = []
-        for j in range(len(render_dicts[i])):
-            coarse.append(render_dicts[i][j].coarse.rgb.permute(0, 2, 1).reshape(SB, 3, HWp, HWp))
-            fine.append(render_dicts[i][j].fine.rgb.permute(0, 2, 1).reshape(SB, 3, HWp, HWp))
-
-        patch_coarse_rgb = torch.cat(
-            [patch_coarse_rgb, torch.cat(coarse, dim=3)],
-            dim=2)
-        patch_fine_rgb = torch.cat(
-            [patch_fine_rgb, torch.cat(fine, dim=3)],
-            dim=2)
-    
-    return patch_coarse_rgb, patch_fine_rgb
-
 def bounding_sphere_radius(all_rays):
     _, H, W, _ = all_rays.shape
 
@@ -761,10 +670,10 @@ def recompose_render_dicts(render_dicts):
         coarse_depth.append(rend_dict.coarse.depth)
         fine_rgb.append(rend_dict.fine.rgb)
         fine_depth.append(rend_dict.fine.depth)
-    coarse_rgb = torch.cat(coarse_rgb, dim=-1)
-    coarse_depth = torch.cat(coarse_depth, dim=-1)
-    fine_rgb = torch.cat(fine_rgb, dim=-1)
-    fine_depth = torch.cat(fine_depth, dim=-1)
+    coarse_rgb = torch.cat(coarse_rgb, dim=-2)
+    coarse_depth = torch.cat(coarse_depth, dim=-2)
+    fine_rgb = torch.cat(fine_rgb, dim=-2)
+    fine_depth = torch.cat(fine_depth, dim=-2)
     
     out_dict = DotMap()
     out_dict.coarse = DotMap()
