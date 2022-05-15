@@ -671,9 +671,9 @@ def recompose_render_dicts(render_dicts):
         fine_rgb.append(rend_dict.fine.rgb)
         fine_depth.append(rend_dict.fine.depth)
     coarse_rgb = torch.cat(coarse_rgb, dim=-2)
-    coarse_depth = torch.cat(coarse_depth, dim=-2)
+    coarse_depth = torch.cat(coarse_depth, dim=-1)
     fine_rgb = torch.cat(fine_rgb, dim=-2)
-    fine_depth = torch.cat(fine_depth, dim=-2)
+    fine_depth = torch.cat(fine_depth, dim=-1)
     
     out_dict = DotMap()
     out_dict.coarse = DotMap()
