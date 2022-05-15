@@ -458,7 +458,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         # Recompose our coarse and fine output. Going to assume fine is used. If an issue, change.
         coarse_app_rgb = patch_dict.coarse.rgb.reshape(SB, 3, P, P)
         coarse_app_rgb = util.ssh_normalization(coarse_app_rgb)
-        coarse_app_rgb = F.interpolate(patch_dict, size=(Hh, Wh), mode="bilinear")
+        coarse_app_rgb = F.interpolate(coarse_app_rgb, size=(Hh, Wh), mode="bilinear")
 
         fine_app_rgb = patch_dict.fine.rgb.reshape(SB, 3, P, P)
         fine_app_rgb = util.ssh_normalization(fine_app_rgb)
