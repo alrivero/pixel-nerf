@@ -689,7 +689,7 @@ def sphere_intersection(rays, radii):
     if torch.any(discriminant < 0.0):
         return None
     
-    t = torch.clamp(-cam_pos_proj - torch.sqrt(discriminant), min=0.0)
+    t = torch.clamp(-cam_pos_proj - torch.sqrt(discriminant), min=0.0).unsqueeze(-1)
     return cam_pos + cam_dir * t
 
 def rays_blinn_newell_uv(intersections, app_imgs):
