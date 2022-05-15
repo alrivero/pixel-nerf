@@ -284,18 +284,19 @@ with torch.no_grad():
 
         # Process the encodings of our patches in batches
         num_unq = unique_uv.shape[0]
+        b_start = 0
+
         unq_encs = []
-        while(num_unq > 0):
-            b_start = (i * args.patch_batch_size)
+        while b_start <= num_unq:
             b_inc = min(num_unq, args.patch_batch_size)
             b_end = b_start + b_inc
-            num_unq -= b_inc
 
             batch_patches = unq_patches[b_start:b_end, :, :, :]
             unq_encs.append(patch_encoder(batch_patches))
+
+            b_start = b_end
         unq_encs = torch.cat(unq_encs)
 
-        unq_encs = patch_encoder(unq_patches)
         all_encs = torch.zeros(B, 512).to(device=device)
         all_encs[inv_map] = unq_encs[inv_map]
 
