@@ -287,7 +287,7 @@ with torch.no_grad():
         b_start = 0
 
         unq_encs = []
-        while b_start <= num_unq:
+        while b_start < num_unq:
             b_inc = min(num_unq, args.patch_batch_size)
             b_end = b_start + b_inc
 
