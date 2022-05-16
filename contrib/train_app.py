@@ -523,8 +523,9 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         SB, B, _ = nerf_rays.shape
         
         nerf_radii = torch.full_like(nerf_radii, args.radius)
-        nerf_enc_patches = util.sample_spherical_enc_patches(nerf_rays, nerf_radii, app_data, self.ssh_HW - 1)
+        nerf_enc_patches, nerf_enc_long_lat = util.sample_spherical_enc_data(nerf_rays, nerf_radii, app_data, self.ssh_HW - 1)
         nerf_encs = self.patch_encoder(nerf_enc_patches).detach().reshape(SB, B, -1)
+        nerf_encs = torch.cat((nerf_encs, nerf_enc_long_lat), dim=-1)
 
         # Render out our scene with our ground truth model
         reg_render_dict = self.reg_pass(nerf_rays)
@@ -547,15 +548,17 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         B = patch_rays.shape[1]
 
         # Some pixels might be really close together and use the same encoding
-        patch_uv = util.sample_spherical_uv(patch_rays, patch_radii, app_data).reshape(-1, 2)
+        patch_uv, patch_long_lat = util.sample_spherical_uv_data(patch_rays, patch_radii, app_data)
+        patch_uv = patch_uv.reshape(-1, 2)
         unique_uv, inv_map = patch_uv.unique(dim=0, return_inverse=True)
         unq_u = unique_uv[:, 0].reshape(1, -1, 1)
         unq_v = unique_uv[:, 1].reshape(1, -1, 1)
         unq_patches = util.uv_to_rgb_patches(app_data, (unq_u, unq_v), 223)
         unq_encs = self.patch_encoder(unq_patches)
-        patch_encs = torch.zeros(SB * B, 512).to(device=device)
+        patch_encs = torch.zeros(SB * B, -1).to(device=device)
         patch_encs[inv_map] = unq_encs[inv_map]
-        patch_encs = patch_encs.reshape(SB, B, 512)
+        patch_encs = patch_encs.reshape(SB, B, -1)
+        patch_encs = torch.cat((patch_encs, patch_long_lat), dim=-1)
 
         # Get a patch to harmonize with
         offset = 223

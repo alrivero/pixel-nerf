@@ -97,6 +97,7 @@ class PixelNeRFNet_A(torch.nn.Module):
         self.num_views_per_obj = 1
 
         self.app_enc_on = app_enc_on
+        self.long_lat_code = PositionalEncoding(num_freqs=4, d_in=2)
 
     def encode(self, images, poses, focal, z_bounds=None, c=None):
         """
@@ -249,6 +250,12 @@ class PixelNeRFNet_A(torch.nn.Module):
             # Camera frustum culling stuff, currently disabled
             combine_index = None
             dim_size = None
+
+            # Apply positional encoding to rgb_enc
+            if app_pass:
+                long_lat = rgb_enc[:, -2:]
+                long_lat_enc = self.long_lat_code(long_lat)
+                rgb_enc = torch.cat((rgb_enc[:, :-2], long_lat_enc), dim=-1)
 
             # Run main NeRF network
             if coarse or self.mlp_fine is None:

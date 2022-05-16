@@ -571,16 +571,18 @@ def bounding_sphere_radius(all_rays):
 
     return dist_to_origin.max()
 
-def sample_spherical_enc_patches(rays, radii, app_imgs, patch_size):
+def sample_spherical_enc_data(rays, radii, app_imgs, patch_size):
     sph_intersects = sphere_intersection(rays, radii)
     uv_env = rays_blinn_newell_uv(sph_intersects, app_imgs)
-    enc_patches = uv_to_rgb_patches(app_imgs, uv_env, patch_size)
-    return enc_patches
 
-def sample_spherical_uv(rays, radii, app_imgs):
+    enc_patches = uv_to_rgb_patches(app_imgs, uv_env, patch_size)
+    long_lat = longitude_lattitude_norm(sph_intersects, app_imgs)
+    return enc_patches, long_lat
+
+def sample_spherical_uv_data(rays, radii, app_imgs):
     sph_intersects = sphere_intersection(rays, radii)
     uv_env = rays_blinn_newell_uv(sph_intersects, app_imgs)
-    return torch.cat(uv_env, dim=-1)
+    return torch.cat(uv_env, dim=-1), 
 
 def sphere_intersection(rays, radii):
     SB, B, _ = rays.shape
@@ -602,19 +604,31 @@ def sphere_intersection(rays, radii):
     return cam_pos + cam_dir * t
 
 def rays_blinn_newell_uv(intersections, app_imgs):
-    SB, B, _ = intersections.shape
     H, W = app_imgs.shape[2:4]
 
-    cam_pos_norm = normalize(intersections)
-    x = cam_pos_norm[:, :, [0]]
-    y = cam_pos_norm[:, :, [1]]
-    z = cam_pos_norm[:, :, [2]]
+    int_norm = normalize(intersections)
+    x = int_norm[:, :, [0]]
+    y = int_norm[:, :, [1]]
+    z = int_norm[:, :, [2]]
 
     azimuth = (torch.atan2(z, x) + (2.0 * pi)) % (2.0 * pi)
     u = (W * (azimuth / (2 * pi))).long()
     v = (H * (torch.asin(-y) + (pi / 2)) / pi).long()   # Negative y since top-left is 0, 0
 
     return u, v
+
+def longitude_lattitude_norm(intersections, app_imgs):
+    H, W = app_imgs.shape[2:4]
+
+    int_norm = normalize(intersections)
+    x = int_norm[:, :, [0]]
+    y = int_norm[:, :, [1]]
+    z = int_norm[:, :, [2]]
+
+    long = torch.atan2(z, x) / pi
+    lat = torch.asin(y) / pi
+
+    return torch.cat(long, lat, dim=-1)
 
 def uv_to_rgb_patches(app_imgs, uv_env, patch_size):
     u, v = uv_env
