@@ -571,15 +571,13 @@ def bounding_sphere_radius(all_rays):
 
     return dist_to_origin.max()
 
-def sample_spherical_enc_patches(rays, radii, app_imgs, patch_size):
-    sph_intersects = sphere_intersection(rays, radii)
-    uv_env = rays_blinn_newell_uv(sph_intersects, app_imgs)
+def sample_spherical_enc_patches(rays, app_imgs, patch_size):
+    uv_env = rays_blinn_newell_uv(rays[:, :, [0, 1, 2]], app_imgs)
     enc_patches = uv_to_rgb_patches(app_imgs, uv_env, patch_size)
     return enc_patches
 
-def sample_spherical_uv(rays, radii, app_imgs):
-    sph_intersects = sphere_intersection(rays, radii)
-    uv_env = rays_blinn_newell_uv(sph_intersects, app_imgs)
+def sample_spherical_uv(rays, app_imgs):
+    uv_env = rays_blinn_newell_uv(rays[:, :, [0, 1, 2]], app_imgs)
     return torch.cat(uv_env, dim=-1)
 
 def sphere_intersection(rays, radii):
@@ -601,11 +599,11 @@ def sphere_intersection(rays, radii):
     t = torch.clamp(-cam_pos_proj - torch.sqrt(discriminant), min=0.0).unsqueeze(-1)
     return cam_pos + cam_dir * t
 
-def rays_blinn_newell_uv(intersections, app_imgs):
-    SB, B, _ = intersections.shape
+def rays_blinn_newell_uv(cam_pos, app_imgs):
+    SB, B, _ = cam_pos.shape
     H, W = app_imgs.shape[2:4]
 
-    cam_pos_norm = normalize(intersections)
+    cam_pos_norm = normalize(cam_pos)
     x = cam_pos_norm[:, :, [0]]
     y = cam_pos_norm[:, :, [1]]
     z = cam_pos_norm[:, :, [2]]

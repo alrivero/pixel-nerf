@@ -523,7 +523,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         SB, B, _ = nerf_rays.shape
         
         nerf_radii = torch.full_like(nerf_radii, args.radius)
-        nerf_enc_patches = util.sample_spherical_enc_patches(nerf_rays, nerf_radii, app_data, self.ssh_HW - 1)
+        nerf_enc_patches = util.sample_spherical_enc_patches(nerf_rays, app_data, self.ssh_HW - 1)
         nerf_encs = self.patch_encoder(nerf_enc_patches).detach().reshape(SB, B, -1)
 
         # Render out our scene with our ground truth model
@@ -547,7 +547,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         B = patch_rays.shape[1]
 
         # Some pixels might be really close together and use the same encoding
-        patch_uv = util.sample_spherical_uv(patch_rays, patch_radii, app_data).reshape(-1, 2)
+        patch_uv = util.sample_spherical_uv(patch_rays, app_data).reshape(-1, 2)
         unique_uv, inv_map = patch_uv.unique(dim=0, return_inverse=True)
         unq_u = unique_uv[:, 0].reshape(1, -1, 1)
         unq_v = unique_uv[:, 1].reshape(1, -1, 1)
@@ -585,10 +585,10 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         # Compute our appearance loss using our appearance encoder and these subpatches
         app_loss = self.app_loss(src_images, patch_render_out, patch_harm_patch, loss_dict)
-        og_loss = self.og_loss(patch_render_out, patch_rays_gt, loss_dict)
+        # og_loss = self.og_loss(patch_render_out, patch_rays_gt, loss_dict)
 
         # Compute our standard NeRF loss
-        loss = nerf_loss + depth_loss + app_loss + og_loss
+        loss = nerf_loss + depth_loss + app_loss
         if is_train:
             loss.backward()
         loss_dict["t"] = loss.item()
