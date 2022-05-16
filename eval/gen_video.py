@@ -181,7 +181,7 @@ if dtu_format:
     n_inter = args.num_views // 5
     args.num_views = n_inter * 5
     t_out = np.linspace(t_in[0], t_in[-1], n_inter * int(t_in[-1])).astype(np.float32)
-    scales = np.array([2.0, 2.0, 2.0, 2.0, 2.0]).astype(np.float32)
+    scales = np.array([2.451, 2.451, 2.451, 2.451, 2.451]).astype(np.float32)
 
     s_new = CubicSpline(t_in, scales, bc_type="periodic")
     s_new = s_new(t_out)
