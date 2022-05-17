@@ -1,3 +1,4 @@
+import pdb
 import sys
 import os
 
@@ -159,7 +160,7 @@ dtu_format = hasattr(dset, "sub_format") and dset.sub_format == "dtu"
 dset_app = AppearanceDataset(args.appdir, "train", image_size=(2048, 4096))
 app_imgs = dset_app[args.app_set_ind][args.app_ind].unsqueeze(0).to(device=device)
 
-if dtu_format:
+if False:
     print("Using DTU camera trajectory")
     # Use hard-coded pose interpolation from IDR for DTU
 
@@ -202,7 +203,7 @@ else:
         radius = (z_near + z_far) * 0.5
         print("> Using default camera radius", radius)
     else:
-        radius = args.radius
+        radius = 2.451
 
     # Use 360 pose sequence from NeRF
     render_poses = torch.stack(
@@ -282,28 +283,29 @@ with torch.no_grad():
         num_unq = unique_uv.shape[0]
         b_start = 0
 
-        unq_encs = []
-        while b_start < num_unq:
-            b_inc = min(num_unq, args.patch_batch_size)
-            b_end = b_start + b_inc
+#        unq_encs = []
+#        while b_start < num_unq:
+#            b_inc = min(num_unq, args.patch_batch_size)
+#            b_end = b_start + b_inc#
 
-            batch_patches = unq_patches[b_start:b_end, :, :, :]
-            unq_encs.append(patch_encoder(batch_patches))
+#            batch_patches = unq_patches[b_start:b_end, :, :, :]
+#            unq_encs.append(patch_encoder(batch_patches))
 
-            b_start = b_end
-        unq_encs = torch.cat(unq_encs)
+#            b_start = b_end
+#        unq_encs = torch.cat(unq_encs)
 
-        all_encs = torch.zeros(B, 512).to(device=device)
-        all_encs[inv_map] = unq_encs[inv_map]
-        all_encs = torch.cat((all_encs[None], long_lat), dim=-1)
+#        all_encs = torch.zeros(B, 512).to(device=device)
+#        all_encs[inv_map] = unq_encs[inv_map]
+#        all_encs = torch.cat((all_encs[None], long_lat), dim=-1)
 
         # Render out our scene using these encodings per ray
-        rgb, _ = render_par(rays[None], all_encs)
+#        rgb, _ = render_par(rays[None], all_encs)
 
         uv_min_max = util.update_uv_min_max(unq_u, unq_v, uv_min_max, 223)
         current_step = (current_step + 1) % args.batch_size
         if current_step == 0:
             harm_area = app_imgs[:, :, uv_min_max[2]:uv_min_max[3], uv_min_max[0]:uv_min_max[1]]
+            pdb.set_trace()
             harm_area = util.ssh_denormalization(harm_area)
 
             # Resize the harmonized area to better fit in video frame
@@ -343,16 +345,18 @@ with torch.no_grad():
                 torch.tensor(app_imgs.shape[-2]).long().to(device=device),
                 torch.tensor(0).long().to(device=device),
             )
-        all_rgb_fine.append(rgb[0])
+#        all_rgb_fine.append(rgb[0])
 
     _depth = None
 
-    rgb_fine = torch.cat(all_rgb_fine)  # rgb_fine (V*H*W, 3)
-    rgb_env = torch.cat(all_rgb_env)
+ #   rgb_fine = torch.cat(all_rgb_fine)  # rgb_fine (V*H*W, 3)
+#    rgb_env = torch.cat(all_rgb_env)
     rgb_imgs = torch.cat(all_app_imgs)
 
-    frames = torch.cat((rgb_fine.view(-1, H, W, 3), rgb_env), dim=-2)
-    frames = torch.cat((frames, rgb_imgs), dim=-3)
+#    frames = torch.cat((rgb_fine.view(-1, H, W, 3), rgb_env), dim=-2)
+#    frames = torch.cat((frames, rgb_imgs), dim=-3)
+
+    frames = rgb_imgs
 
 print("Writing video")
 vid_name = "{:04}".format(args.subset)
