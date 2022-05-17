@@ -573,16 +573,16 @@ def bounding_sphere_radius(all_rays):
 
 def sample_spherical_enc_data(rays, radii, app_imgs, patch_size):
     sph_intersects = sphere_intersection(rays, radii)
-    uv_env = rays_blinn_newell_uv(sph_intersects, app_imgs)
+    uv_env = rays_blinn_newell_uv(sph_intersects, radii, app_imgs, patch_size)
 
     enc_patches = uv_to_rgb_patches(app_imgs, uv_env, patch_size)
     long_lat = longitude_lattitude_norm(sph_intersects, app_imgs)
     return enc_patches, long_lat
 
-def sample_spherical_uv_data(rays, radii, app_imgs):
+def sample_spherical_uv_data(rays, radii, app_imgs, patch_size):
     sph_intersects = sphere_intersection(rays, radii)
-    uv_env = rays_blinn_newell_uv(sph_intersects, app_imgs)
-    
+    uv_env = rays_blinn_newell_uv(sph_intersects, radii, app_imgs, patch_size)
+
     long_lat = longitude_lattitude_norm(sph_intersects, app_imgs)
     return torch.cat(uv_env, dim=-1), long_lat
 
@@ -605,30 +605,34 @@ def sphere_intersection(rays, radii):
     t = torch.clamp(-cam_pos_proj - torch.sqrt(discriminant), min=0.0).unsqueeze(-1)
     return cam_pos + cam_dir * t
 
-def rays_blinn_newell_uv(intersections, app_imgs):
+def rays_blinn_newell_uv(intersections, app_imgs, radii, patch_size):
+    SB, B, _ = intersections.shape
     H, W = app_imgs.shape[2:4]
+    H -= patch_size
+    W -= patch_size
 
-    int_norm = normalize(intersections)
-    x = int_norm[:, :, [0]]
-    y = int_norm[:, :, [1]]
-    z = int_norm[:, :, [2]]
+    radii = radii.expand(SB, B).unsqueeze(-1)
+    x = intersections[:, :, [0]]
+    y = intersections[:, :, [1]]
+    z = intersections[:, :, [2]]
 
     azimuth = (torch.atan2(z, x) + (2.0 * pi)) % (2.0 * pi)
     u = (W * (azimuth / (2 * pi))).long()
-    v = (H * (torch.asin(-y) + (pi / 2)) / pi).long()   # Negative y since top-left is 0, 0
+    v = (H * (torch.asin(-y / radii) + (pi / 2)) / pi).long()   # Negative y since top-left is 0, 0
 
     return u, v
 
-def longitude_lattitude_norm(intersections, app_imgs):
+def longitude_lattitude_norm(intersections, radii, app_imgs):
+    SB, B, _ = intersections.shape
     H, W = app_imgs.shape[2:4]
 
-    int_norm = normalize(intersections)
-    x = int_norm[:, :, [0]]
-    y = int_norm[:, :, [1]]
-    z = int_norm[:, :, [2]]
+    x = intersections[:, :, [0]]
+    y = intersections[:, :, [1]]
+    z = intersections[:, :, [2]]
+    radii = radii.expand(SB, B).unsqueeze(-1)
 
     long = torch.atan2(z, x) / pi
-    lat = torch.asin(y) / pi
+    lat = torch.asin(-y / radii) / (pi / 2)
 
     return torch.cat((long, lat), dim=-1)
 

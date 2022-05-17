@@ -52,7 +52,7 @@ def extra_args(parser):
     parser.add_argument(
         "--elevation",
         type=float,
-        default=-10.0,
+        default=-20.0,
         help="Elevation angle (negative is above)",
     )
     parser.add_argument(
@@ -154,11 +154,6 @@ patch_encoder = PatchEncoder(ref_encoder).to(device=device)
 
 print("Generating rays")
 
-# app_size = None
-# app_size_h = conf.get_int("data.app_data.img_size_h", None)
-# app_size_w = conf.get_int("data.app_data.img_size_w", None)
-# if (app_size_h is not None and app_size_w is not None):
-#     app_size = (app_size_h, app_size_w)
 dtu_format = hasattr(dset, "sub_format") and dset.sub_format == "dtu"
 
 dset_app = AppearanceDataset(args.appdir, "train", image_size=(2048, 4096))
@@ -308,7 +303,7 @@ with torch.no_grad():
         uv_min_max = util.update_uv_min_max(unq_u, unq_v, uv_min_max, 223)
         current_step = (current_step + 1) % args.batch_size
         if current_step == 0:
-            harm_area = app_imgs[:, :, uv_min_max[0]:uv_min_max[1], uv_min_max[2]:uv_min_max[3]]
+            harm_area = app_imgs[:, :, uv_min_max[2]:uv_min_max[3], uv_min_max[0]:uv_min_max[1]]
             harm_area = util.ssh_denormalization(harm_area)
 
             # Resize the harmonized area to better fit in video frame
