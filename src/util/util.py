@@ -582,7 +582,9 @@ def sample_spherical_enc_data(rays, radii, app_imgs, patch_size):
 def sample_spherical_uv_data(rays, radii, app_imgs):
     sph_intersects = sphere_intersection(rays, radii)
     uv_env = rays_blinn_newell_uv(sph_intersects, app_imgs)
-    return torch.cat(uv_env, dim=-1), 
+    
+    long_lat = longitude_lattitude_norm(sph_intersects, app_imgs)
+    return torch.cat(uv_env, dim=-1), long_lat
 
 def sphere_intersection(rays, radii):
     SB, B, _ = rays.shape
