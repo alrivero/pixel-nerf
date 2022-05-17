@@ -555,7 +555,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         unq_v = unique_uv[:, 1].reshape(1, -1, 1)
         unq_patches = util.uv_to_rgb_patches(app_data, (unq_u, unq_v), 223)
         unq_encs = self.patch_encoder(unq_patches)
-        patch_encs = torch.zeros(SB * B, -1).to(device=device)
+        patch_encs = torch.zeros(SB * B, 512).to(device=device)
         patch_encs[inv_map] = unq_encs[inv_map]
         patch_encs = patch_encs.reshape(SB, B, -1)
         patch_encs = torch.cat((patch_encs, patch_long_lat), dim=-1)
