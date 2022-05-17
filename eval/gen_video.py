@@ -1,4 +1,3 @@
-import pdb
 import sys
 import os
 
@@ -305,7 +304,6 @@ with torch.no_grad():
         current_step = (current_step + 1) % args.batch_size
         if current_step == 0:
             harm_area = app_imgs[:, :, uv_min_max[2]:(uv_min_max[3] + 223), uv_min_max[0]:(uv_min_max[1] + 223)]
-            pdb.set_trace()
             harm_area = util.ssh_denormalization(harm_area)
 
             # Resize the harmonized area to better fit in video frame
