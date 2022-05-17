@@ -276,7 +276,8 @@ with torch.no_grad():
         B, _ = rays.shape
 
         # Some pixels might be really close together and use the same encoding
-        uv_env = util.sample_spherical_uv(rays[None], bounding_radius, app_imgs).reshape(-1, 2)
+        uv_env, long_lat = util.sample_spherical_uv_data(rays[None], bounding_radius, app_imgs)
+        uv_env = uv_env.reshape(-1, 2)
         unique_uv, inv_map = uv_env.unique(dim=0, return_inverse=True)
         unq_u = unique_uv[:, 0].reshape(1, -1, 1)
         unq_v = unique_uv[:, 1].reshape(1, -1, 1)
@@ -299,9 +300,10 @@ with torch.no_grad():
 
         all_encs = torch.zeros(B, 512).to(device=device)
         all_encs[inv_map] = unq_encs[inv_map]
+        all_encs = torch.cat((all_encs[None], long_lat), dim=-1)
 
         # Render out our scene using these encodings per ray
-        rgb, _ = render_par(rays[None], all_encs[None])
+        rgb, _ = render_par(rays[None], all_encs)
 
         uv_min_max = util.update_uv_min_max(unq_u, unq_v, uv_min_max, 223)
         current_step = (current_step + 1) % args.batch_size
