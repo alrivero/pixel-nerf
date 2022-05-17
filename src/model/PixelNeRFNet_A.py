@@ -253,9 +253,9 @@ class PixelNeRFNet_A(torch.nn.Module):
 
             # Apply positional encoding to rgb_enc
             if app_pass:
-                long_lat = rgb_enc[:, -2:]
+                long_lat = rgb_enc[:, :, -2:]
                 long_lat_enc = self.long_lat_code(long_lat)
-                rgb_enc = torch.cat((rgb_enc[:, :-2], long_lat_enc), dim=-1)
+                rgb_enc = torch.cat((rgb_enc[:, :, :-2], long_lat_enc), dim=-1)
 
             # Run main NeRF network
             if coarse or self.mlp_fine is None:
