@@ -628,7 +628,7 @@ def longitude_lattitude_norm(intersections, app_imgs):
     long = torch.atan2(z, x) / pi
     lat = torch.asin(y) / pi
 
-    return torch.cat(long, lat, dim=-1)
+    return torch.cat((long, lat), dim=-1)
 
 def uv_to_rgb_patches(app_imgs, uv_env, patch_size):
     u, v = uv_env
