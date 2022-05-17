@@ -577,14 +577,14 @@ def sample_spherical_enc_data(rays, radii, app_imgs, patch_size):
     uv_env = rays_blinn_newell_uv(sph_intersects, radii, app_imgs, patch_size)
 
     enc_patches = uv_to_rgb_patches(app_imgs, uv_env, patch_size)
-    long_lat = longitude_lattitude_norm(sph_intersects, app_imgs)
+    long_lat = longitude_lattitude_norm(sph_intersects, radii, app_imgs)
     return enc_patches, long_lat
 
 def sample_spherical_uv_data(rays, radii, app_imgs, patch_size):
     sph_intersects = sphere_intersection(rays, radii)
     uv_env = rays_blinn_newell_uv(sph_intersects, radii, app_imgs, patch_size)
 
-    long_lat = longitude_lattitude_norm(sph_intersects, app_imgs)
+    long_lat = longitude_lattitude_norm(sph_intersects, radii, app_imgs)
     return torch.cat(uv_env, dim=-1), long_lat
 
 def sphere_intersection(rays, radii):
@@ -606,7 +606,7 @@ def sphere_intersection(rays, radii):
     t = torch.clamp(-cam_pos_proj - torch.sqrt(discriminant), min=0.0).unsqueeze(-1)
     return cam_pos + cam_dir * t
 
-def rays_blinn_newell_uv(intersections, app_imgs, radii, patch_size):
+def rays_blinn_newell_uv(intersections, radii, app_imgs, patch_size):
     SB, B, _ = intersections.shape
     H, W = app_imgs.shape[2:4]
     H -= patch_size
