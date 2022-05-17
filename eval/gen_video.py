@@ -272,7 +272,7 @@ with torch.no_grad():
         B, _ = rays.shape
 
         # Some pixels might be really close together and use the same encoding
-        uv_env, long_lat = util.sample_spherical_uv_data(rays[None], bounding_radius, app_imgs)
+        uv_env, long_lat = util.sample_spherical_uv_data(rays[None], bounding_radius, app_imgs, 223)
         uv_env = uv_env.reshape(-1, 2)
         unique_uv, inv_map = uv_env.unique(dim=0, return_inverse=True)
         unq_u = unique_uv[:, 0].reshape(1, -1, 1)
