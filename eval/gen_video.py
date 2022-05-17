@@ -345,16 +345,12 @@ with torch.no_grad():
             )
         all_rgb_fine.append(rgb[0])
 
-    _depth = None
-
     rgb_fine = torch.cat(all_rgb_fine)  # rgb_fine (V*H*W, 3)
     rgb_env = torch.cat(all_rgb_env)
     rgb_imgs = torch.cat(all_app_imgs)
 
     frames = torch.cat((rgb_fine.view(-1, H, W, 3), rgb_env), dim=-2)
     frames = torch.cat((frames, rgb_imgs), dim=-3)
-
-    frames = rgb_imgs
 
 print("Writing video")
 vid_name = "{:04}".format(args.subset)
