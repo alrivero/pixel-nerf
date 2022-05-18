@@ -550,13 +550,16 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         # Some pixels might be really close together and use the same encoding
         patch_uv, patch_long_lat = util.sample_spherical_uv_data(patch_rays, patch_radii, app_data, self.ssh_HW - 1)
         patch_uv = patch_uv.reshape(-1, 2)
+
         unique_uv, inv_map = patch_uv.unique(dim=0, return_inverse=True)
         unq_u = unique_uv[:, 0].reshape(1, -1, 1)
         unq_v = unique_uv[:, 1].reshape(1, -1, 1)
         unq_patches = util.uv_to_rgb_patches(app_data, (unq_u, unq_v), self.ssh_HW - 1)
         unq_encs = self.patch_encoder(unq_patches)
+
+        ind = torch.arange(SB * B)
         patch_encs = torch.zeros(SB * B, 512).to(device=device)
-        patch_encs[inv_map] = unq_encs[inv_map]
+        patch_encs[ind] = unq_encs[inv_map]
         patch_encs = patch_encs.reshape(SB, B, -1)
         patch_encs = torch.cat((patch_encs, patch_long_lat), dim=-1)
 
