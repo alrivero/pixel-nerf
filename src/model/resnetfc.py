@@ -228,6 +228,7 @@ class ResnetFC_App(ResnetFC):
         if self.app_enc_on:
             size_in = self.blocks[self.combine_layer - 1].size_out + app_in
             size_out = self.blocks[self.combine_layer].size_out
+            self.long_lat_block = ResnetBlockFC(app_in, app_in, app_in, beta)
             self.app_trans_block = ResnetBlockFC(size_in, size_out, size_out, beta)
             self.app_blocks = nn.ModuleList(
                 [ResnetBlockFC(d_hidden, beta=beta) for _ in range(self.combine_layer, self.n_blocks)]
@@ -284,6 +285,7 @@ class ResnetFC_App(ResnetFC):
                 cont_ind = 0
                 end_ind = len(self.app_blocks)
 
+                app_enc = self.long_lat_block(app_enc)
                 x = torch.cat((app_enc, x), dim=-1)
                 x = self.app_trans_block(x) # Use transition block to move to lower dim used by blocks
             
