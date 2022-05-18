@@ -294,7 +294,8 @@ with torch.no_grad():
         unq_encs = torch.cat(unq_encs)
 
         all_encs = torch.zeros(B, 512).to(device=device)
-        all_encs[inv_map] = unq_encs[inv_map]
+        ind = torch.arange(B)
+        all_encs[ind] = unq_encs[inv_map]
         all_encs = torch.cat((all_encs[None], long_lat), dim=-1)
 
         # Render out our scene using these encodings per ray
