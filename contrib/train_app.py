@@ -564,6 +564,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         patch_encs = torch.cat((patch_encs, patch_long_lat), dim=-1)
 
         # Get a patch to harmonize with
+        # *******
         offset = 223
         u_max = unq_u.max() + offset
         u_min = unq_u.min()
@@ -825,7 +826,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                     batch == self.num_total_batches - 1
                     or batch % self.accu_grad == self.accu_grad - 1
                 ):
-                    # torch.nn.utils.clip_grad_norm_(net.parameters(), 0.5)
+                    torch.nn.utils.clip_grad_norm_(net.parameters(), 0.5)
                     self.optim.step()
                     self.optim.zero_grad()
 
