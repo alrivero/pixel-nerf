@@ -571,6 +571,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         v_max = unq_v.max() + offset
         v_min = unq_v.min()
         patch_harm_patch = app_data[:, :, v_min:v_max, u_min:u_max]
+        patch_harm_patch = torch.flip(patch_harm_patch, dim=-1)
+        patch_harm_patch = torch.flip(patch_harm_patch, dim=-2)
 
         # NOTE: IF THIS WORKS, FIX SB
 
