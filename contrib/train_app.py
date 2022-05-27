@@ -309,7 +309,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         all_rgb_gt = []
         all_rays = []
-        all_radii = []
 
         for obj_idx in range(SB):
             if all_bboxes is not None:
@@ -325,7 +324,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             cam_rays = util.gen_rays(
                 poses, W, H, focal, self.z_near, self.z_far, c=c
             )  # (NV, H, W, 8)
-            bounding_radius = util.bounding_sphere_radius(cam_rays).unsqueeze(0)
 
             rgb_gt_all = images_0to1
             rgb_gt_all = rgb_gt_all[self.views[obj_idx]]
@@ -348,15 +346,13 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
             all_rgb_gt.append(rgb_gt)
             all_rays.append(rays)
-            all_radii.append(bounding_radius)
 
         all_rgb_gt = torch.stack(all_rgb_gt)  # (SB, ray_batch_size, 3)
         all_rays = torch.stack(all_rays)  # (SB, ray_batch_size, 8)
-        all_radii = torch.stack(all_radii)
 
         all_bboxes = all_poses = all_images = None
 
-        return all_rays, all_rgb_gt, all_radii
+        return all_rays, all_rgb_gt
 
     def patch_rays(self, data):
         if "images" not in data:
@@ -369,7 +365,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         all_rgb_gt = []
         all_rays = []
-        all_radii = []
 
         for obj_idx in range(SB):
             images = all_images[obj_idx]  # (NV, 3, H, W)
@@ -383,7 +378,6 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             cam_rays = util.gen_rays(
                 poses, W, H, focal, self.z_near, self.z_far, c=c
             )
-            bounding_radius = util.bounding_sphere_radius(cam_rays).unsqueeze(0)
             cam_rays = cam_rays.permute(0, 3, 1, 2)
 
             rgb_gt_all = images_0to1
@@ -402,11 +396,9 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
             all_rgb_gt.append(rgb_gt)
             all_rays.append(rays)
-            all_radii.append(bounding_radius)
 
         all_rgb_gt = torch.stack(all_rgb_gt)  # (SB, ray_batch_size, 3)
         all_rays = torch.stack(all_rays)  # (SB, ray_batch_size, 8)
-        all_radii = torch.stack(all_radii)
 
         image_ord = torch.randint(0, int(args.nviews), (SB, 1)).to(device=device)
         all_rays = util.batched_index_select_nd(all_rays, image_ord)
@@ -415,7 +407,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
         all_poses = all_images = None
 
-        return all_rays, all_rgb_gt, all_radii
+        return all_rays, all_rgb_gt
 
     def encode_back_patch(self):
         P = self.patch_dim
@@ -530,10 +522,10 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         self.encode_chosen_views(data, src_images, src_poses)
 
         # Choose our standard randomly-smapled rays for our regular pass
-        nerf_rays, nerf_rays_gt, nerf_radii = self.rand_rays(data, is_train, global_step)
+        nerf_rays, nerf_rays_gt = self.rand_rays(data, is_train, global_step)
         SB, B, _ = nerf_rays.shape
         
-        nerf_radii = torch.full_like(nerf_radii, args.radius)
+        nerf_radii = torch.full(SB, args.radius)
         nerf_enc_patches, nerf_enc_long_lat = util.sample_spherical_rand_rays(nerf_rays, nerf_radii, app_data, self.ssh_HW - 1)
         nerf_encs = self.patch_encoder(nerf_enc_patches).detach().reshape(SB, B, -1)
         nerf_encs = torch.cat((nerf_encs, nerf_enc_long_lat), dim=-1)
@@ -554,8 +546,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         reg_render_dict = app_render_dict = None
 
         # Choose rays corresponding to an image patch at our disposal
-        patch_rays, patch_rays_gt, patch_radii = self.patch_rays(data)
-        patch_radii = torch.full_like(patch_radii, args.radius)
+        patch_rays, patch_rays_gt = self.patch_rays(data)
+        patch_radii = nerf_radii
         B = patch_rays.shape[1]
 
         # Some pixels might be really close together and use the same encoding
