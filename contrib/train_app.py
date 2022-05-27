@@ -525,7 +525,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         nerf_rays, nerf_rays_gt = self.rand_rays(data, is_train, global_step)
         SB, B, _ = nerf_rays.shape
         
-        nerf_radii = torch.full(SB, args.radius)
+        nerf_radii = torch.full((SB, 1), args.radius).flatten()
         nerf_enc_patches, nerf_enc_long_lat = util.sample_spherical_rand_rays(nerf_rays, nerf_radii, app_data, self.ssh_HW - 1)
         nerf_encs = self.patch_encoder(nerf_enc_patches).detach().reshape(SB, B, -1)
         nerf_encs = torch.cat((nerf_encs, nerf_enc_long_lat), dim=-1)
