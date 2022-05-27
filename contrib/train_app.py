@@ -1,3 +1,4 @@
+import pdb
 # Training to a set of multiple objects (e.g. ShapeNet or DTU)
 # tensorboard logs available in logs/<expname>
 import debug
@@ -526,6 +527,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         SB, B, _ = nerf_rays.shape
         
         nerf_radii = torch.full((SB, 1), args.radius).flatten()
+        pdb.set_trace()
         nerf_enc_patches, nerf_enc_long_lat = util.sample_spherical_rand_rays(nerf_rays, nerf_radii, app_data, self.ssh_HW - 1)
         nerf_encs = self.patch_encoder(nerf_enc_patches).detach().reshape(SB, B, -1)
         nerf_encs = torch.cat((nerf_encs, nerf_enc_long_lat), dim=-1)
