@@ -255,7 +255,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             self.patch_encoder = PatchEncoder(ref_encoder)
 
             # Sphere additions
-            self.enc_sphere = ico_sphere(level=args.sphere_level)
+            self.ico_verts = ico_sphere(level=args.sphere_level).verts_list[0]
         else:
             self.appearance_img = None
         
@@ -528,7 +528,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         
         nerf_radii = torch.full((SB, 1), args.radius).flatten()
         pdb.set_trace()
-        nerf_enc_patches, nerf_enc_long_lat = util.sample_spherical_rand_rays(nerf_rays, nerf_radii, app_data, self.ssh_HW - 1)
+        nerf_enc_patches, nerf_enc_long_lat = util.sample_spherical_rand_rays(nerf_rays, self.ico_verts, nerf_radii, app_data, self.ssh_HW - 1)
         nerf_encs = self.patch_encoder(nerf_enc_patches).detach().reshape(SB, B, -1)
         nerf_encs = torch.cat((nerf_encs, nerf_enc_long_lat), dim=-1)
 
