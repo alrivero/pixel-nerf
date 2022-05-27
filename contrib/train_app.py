@@ -32,6 +32,7 @@ from random import randint
 from torchvision.transforms.functional_tensor import crop
 from contrib.model.unet_tile_se_norm import StyleEncoder
 from contrib.model.PatchEncoder import PatchEncoder
+from pytorch3d.utils import ico_sphere
 
 
 def extra_args(parser):
@@ -117,6 +118,13 @@ def extra_args(parser):
         type=float,
         default=2.451,
         help="Distance of camera from origin, default is average of z_far, z_near of dataset (only for non-DTU)",
+    )
+    parser.add_argument(
+        "--sphere_level",
+        "-S",
+        type=int,
+        default=5,
+        help="Level of subdivision used for sphere points",
     )
     return parser
 
@@ -244,6 +252,9 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             self.ref_app_crit = loss.ReferenceColorLoss(ref_encoder).to(device=device)
             
             self.patch_encoder = PatchEncoder(ref_encoder)
+
+            # Sphere additions
+            self.enc_sphere = ico_sphere(level=args.sphere_level)
         else:
             self.appearance_img = None
         
@@ -523,7 +534,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         SB, B, _ = nerf_rays.shape
         
         nerf_radii = torch.full_like(nerf_radii, args.radius)
-        nerf_enc_patches, nerf_enc_long_lat = util.sample_spherical_enc_data(nerf_rays, nerf_radii, app_data, self.ssh_HW - 1)
+        nerf_enc_patches, nerf_enc_long_lat = util.sample_spherical_rand_rays(nerf_rays, nerf_radii, app_data, self.ssh_HW - 1)
         nerf_encs = self.patch_encoder(nerf_enc_patches).detach().reshape(SB, B, -1)
         nerf_encs = torch.cat((nerf_encs, nerf_enc_long_lat), dim=-1)
 
