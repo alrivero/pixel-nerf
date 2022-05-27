@@ -255,7 +255,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             self.patch_encoder = PatchEncoder(ref_encoder)
 
             # Sphere additions
-            self.ico_verts = ico_sphere(level=args.sphere_level).verts_list[0]
+            self.ico_verts = ico_sphere(level=args.sphere_level).verts_list()[0]
         else:
             self.appearance_img = None
         
