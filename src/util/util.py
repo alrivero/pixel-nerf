@@ -556,6 +556,22 @@ def get_random_patch(t, Hp, Wp):
 
     return crop(t, i, j, Hp, Wp)
 
+def uv_sphere(radius, subdiv):
+    subdiv_long = (torch.linspace(0, 1, subdiv) * 2 * pi).unsqueeze(-1)
+    subdiv_lat = (torch.linspace(-1, 1, subdiv) * (pi / 2)).unsqueeze(-1)
+
+    sin_long = torch.sin(subdiv_long)
+    cos_long = torch.cos(subdiv_long)
+
+    sin_lat = torch.sin(subdiv_lat)
+    cos_lat = torch.cos(subdiv_lat)
+
+    x = radius * torch.matmul(sin_lat, cos_long.T).reshape(subdiv * subdiv, 1)
+    y = radius * torch.matmul(sin_lat, sin_long.T).reshape(subdiv * subdiv, 1)
+    z = radius * cos_lat.expand(subdiv, subdiv).reshape(subdiv * subdiv, 1)
+
+    return torch.cat((x, y, z), dim=-1)
+
 def bounding_long_lat(patch_rays, radii, app_imgs):
     all_ll = longitude_lattitude_norm(patch_rays, radii, app_imgs)
     all_long = all_ll[:, :, 0]
