@@ -622,7 +622,7 @@ def sample_spherical_rand_rays(rays, icos_verts, radii, app_imgs, patch_size):
     long_lat = longitude_lattitude_norm(closest_verts, radii, app_imgs)
     return enc_patches, long_lat
 
-def sample_spherical_patch_rays(patch_rays, icos_verts, radii, app_imgs, patch_size):
+def sample_spherical_patch_rays(patch_rays, icos_verts, radii, app_imgs):
     view_coords = viewing_plane_sphere_coords(patch_rays, radii)
     bounding_ll = bounding_long_lat(view_coords, radii, app_imgs)
     bounded_icos = bounded_icos_verts(icos_verts, bounding_ll, radii, app_imgs)
