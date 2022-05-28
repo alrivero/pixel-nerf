@@ -557,23 +557,14 @@ def get_random_patch(t, Hp, Wp):
     return crop(t, i, j, Hp, Wp)
 
 def bounding_long_lat(patch_rays, radii, app_imgs):
-    _, H, W, _ = patch_rays.shape
+    all_ll = longitude_lattitude_norm(patch_rays, radii, app_imgs)
+    all_long = all_ll[:, :, 0]
+    all_lat = all_ll[:, :, 1]
 
-    # We take all corners of our viewing planes
-    corner_ul = patch_rays[:, 0, 0, :]
-    corner_ur = patch_rays[:, H - 1, 0, :]
-    corner_ll = patch_rays[:, 0, W - 1, :]
-    corner_lr = patch_rays[:, H - 1, W - 1, :]
-    corners = torch.cat([corner_ul, corner_ur, corner_ll, corner_lr])
-
-    corners_ll = longitude_lattitude_norm(corners, radii, app_imgs)
-    corners_long = corners_ll[:, :, 0]
-    corners_lat = corners_ll[:, :, 1]
-
-    long_min = corners_long.min(dim=-1)[0]
-    long_max = corners_long.max(dim=-1)[0]
-    lat_min = corners_lat.min(dim=-1)[0]
-    lat_max = corners_lat.max(dim=-1)[0]
+    long_min = all_long.min(dim=-1)[0]
+    long_max = all_long.max(dim=-1)[0]
+    lat_min = all_lat.min(dim=-1)[0]
+    lat_max = all_lat.max(dim=-1)[0]
 
     return long_min, long_max, lat_min, lat_max
 
@@ -648,7 +639,6 @@ def inverse_distance_weighting(view_coords, bounded_icos, icos_encs, radii):
         all_results.append(weighed_result)
     
     return all_results
-
 
 def sphere_intersection(rays, radii):
     SB, B, _ = rays.shape
