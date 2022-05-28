@@ -578,9 +578,10 @@ def bounded_icos_verts(icos_verts, bounding_ll, radii, app_imgs):
 
     all_icos_verts = []
     for i in range(SB):
-        final_long = icos_long >= long_min[i] and icos_long <= long_max[i]
-        final_lat = icos_lat >= lat_min[i] and icos_lat <= lat_max[i]
-        final_ind = final_long and final_lat
+        final_long = torch.logical_and(icos_long >= long_min[i], icos_long <= long_max[i])
+        final_lat = torch.logical_and(icos_lat >= lat_min[i], icos_lat <= lat_max[i])
+        final_ind = torch.logical_and(final_long, final_lat).flatten()
+        
         all_icos_verts.append(icos_verts[final_ind])
 
     return all_icos_verts
