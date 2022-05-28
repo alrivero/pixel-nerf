@@ -602,10 +602,7 @@ def viewing_plane_sphere_coords(rays, radii):
     cam_dir = rays[:, :, [3, 4, 5]]
     cam_near = rays[:, :, [6]]
 
-    view_coords = cam_pos + cam_dir * cam_near
-    view_coords = normalize(view_coords) * radii
-
-    return view_coords
+    return cam_pos + cam_dir * cam_near
 
 def closest_sphere_verts(view_coords, icos_verts):
     SB, B, C = view_coords.shape
