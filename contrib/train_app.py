@@ -256,6 +256,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
             # Sphere additions
             self.ico_verts = ico_sphere(level=args.sphere_level).verts_list()[0].to(device=device)
+            self.ico_verts *= args.radius
         else:
             self.appearance_img = None
         
