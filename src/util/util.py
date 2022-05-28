@@ -581,7 +581,7 @@ def bounded_icos_verts(icos_verts, bounding_ll, radii, app_imgs):
         final_long = torch.logical_and(icos_long >= long_min[i], icos_long <= long_max[i])
         final_lat = torch.logical_and(icos_lat >= lat_min[i], icos_lat <= lat_max[i])
         final_ind = torch.logical_and(final_long, final_lat).flatten()
-        
+
         all_icos_verts.append(icos_verts[final_ind])
 
     return all_icos_verts
@@ -594,7 +594,10 @@ def viewing_plane_sphere_coords(rays, radii):
     cam_dir = rays[:, :, [3, 4, 5]]
     cam_near = rays[:, :, [6]]
 
-    return cam_pos + cam_dir * cam_near
+    view_coords = cam_pos + cam_dir * cam_near
+    view_coords = normalize(view_coords) * radii
+
+    return view_coords
 
 def closest_sphere_verts(view_coords, icos_verts):
     SB, B, C = view_coords.shape
