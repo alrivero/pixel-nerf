@@ -595,7 +595,7 @@ def viewing_plane_sphere_coords(rays, radii):
     cam_near = rays[:, :, [6]]
 
     view_coords = cam_pos + cam_dir * cam_near
-    view_coords = normalize(view_coords) * radii
+    view_coords = normalize(view_coords, dim=-1) * radii
 
     return view_coords
 
