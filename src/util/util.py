@@ -570,7 +570,7 @@ def bounding_long_lat(patch_rays, radii, app_imgs):
 
 def bounded_icos_verts(icos_verts, bounding_ll, radii, app_imgs):
     long_min, long_max, lat_min, lat_max = bounding_ll
-    SB, _ = long_min.shape
+    SB = long_min.shape[0]
 
     icos_ll = longitude_lattitude_norm(icos_ll[None], radii, app_imgs).reshape(-1, 2)
     icos_long = icos_ll[:, [0]]
