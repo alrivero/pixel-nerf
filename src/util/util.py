@@ -1,3 +1,4 @@
+from operator import sub
 import pdb
 from unittest.mock import patch
 import cv2
@@ -566,9 +567,9 @@ def uv_sphere(radius, subdiv):
     sin_lat = torch.sin(subdiv_lat)
     cos_lat = torch.cos(subdiv_lat)
 
-    x = radius * torch.matmul(sin_lat, cos_long.T).reshape(2 * subdiv * subdiv, 1)
-    y = radius * torch.matmul(sin_lat, sin_long.T).reshape(2 * subdiv * subdiv, 1)
-    z = radius * cos_lat.expand(subdiv, 2 * subdiv).reshape(2 * subdiv * subdiv, 1)
+    x = radius * torch.matmul(cos_long, sin_lat.T)
+    y = radius * torch.matmul(sin_long, sin_lat.T)
+    z = radius * cos_lat.expand(2 * subdiv, subdiv)
 
     return torch.cat((x, y, z), dim=-1)
 
@@ -615,27 +616,18 @@ def viewing_plane_sphere_coords(rays, radii):
 
     return view_coords
 
-def closest_sphere_verts(view_coords, icos_verts):
-    SB, B, C = view_coords.shape
-    view_coords = view_coords.reshape(-1, C)
-
-    dot_prod = torch.matmul(icos_verts, view_coords.T)
-    closest_vert_ind = dot_prod.argmax(dim=0)
-
-    return icos_verts[closest_vert_ind].reshape(SB, B, C)
-
-def sample_spherical_rand_rays(rays, icos_verts, radii, app_imgs, patch_size):
+def sample_spherical_rand_rays(rays, icos_verts, radii, app_imgs, patch_size, subdiv):
     view_coords = viewing_plane_sphere_coords(rays, radii)
-    closest_verts = closest_sphere_verts(view_coords, icos_verts)
+    closest_verts = closest_sphere_verts(view_coords, icos_verts, subdiv)
 
     uv_env = rays_blinn_newell_uv(closest_verts, radii, app_imgs, patch_size)
     enc_patches = uv_to_rgb_patches(app_imgs, uv_env, patch_size)
     long_lat = longitude_lattitude_norm(closest_verts, radii, app_imgs)
     return enc_patches, long_lat
 
-def sample_spherical_patch_rays(patch_rays, icos_verts, radii, app_imgs, patch_size):
+def sample_spherical_patch_rays(patch_rays, icos_verts, radii, app_imgs, patch_size, subdiv):
     view_coords = viewing_plane_sphere_coords(patch_rays, radii)
-    closest_verts = closest_sphere_verts(view_coords, icos_verts)
+    closest_verts = closest_sphere_verts(view_coords, icos_verts, subdiv)
 
     uv_env = rays_blinn_newell_uv(closest_verts, radii, app_imgs, patch_size)
     long_lat = longitude_lattitude_norm(closest_verts, radii, app_imgs)
@@ -696,6 +688,27 @@ def rays_blinn_newell_uv(intersections, radii, app_imgs, patch_size):
     v = (H * (torch.asin(y / radii) + (pi / 2)) / pi).long()   # Negative y since top-left is 0, 0
 
     return u, v
+
+def closest_sphere_verts(view_coords, sph_verts, subdiv):
+    SB, B, _ = view_coords.shape
+
+    x = view_coords[:, :, [0]]
+    y = view_coords[:, :, [1]]
+    z = view_coords[:, :, [2]]
+    radii = radii.expand(SB, B).unsqueeze(-1)
+
+    view_long = ((torch.atan2(y, x) + (2.0 * pi)) % (2.0 * pi)).flatten()
+    view_lat = (torch.acos(z / radii)).flatten()
+
+    subdiv_long = (torch.linspace(0, 1, 2 * subdiv) * 2 * pi)
+    subdiv_lat = (torch.linspace(0, 1, subdiv) * pi)
+    subdiv_long = subdiv_long.expand(SB * B, 2 * subdiv)
+    subdiv_lat = subdiv_lat.expand(SB * B, subdiv)
+
+    long_inds = 1 / (1 + F.relu(subdiv_long - view_long)).max(dim=0)
+    lat_inds = 1 / (1 + F.relu(subdiv_lat - view_lat)).max(dim=0)
+
+    return sph_verts[long_inds, lat_inds :].reshape(SB, B, -1)
 
 def longitude_lattitude_norm(intersections, radii, app_imgs):
     SB, B, _ = intersections.shape

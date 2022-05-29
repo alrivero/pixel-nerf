@@ -121,10 +121,10 @@ def extra_args(parser):
         help="Distance of camera from origin, default is average of z_far, z_near of dataset (only for non-DTU)",
     )
     parser.add_argument(
-        "--sphere_level",
+        "--sphere_subdiv",
         "-S",
         type=int,
-        default=5,
+        default=200,
         help="Level of subdivision used for sphere points",
     )
     return parser
@@ -255,7 +255,8 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             self.patch_encoder = PatchEncoder(ref_encoder)
 
             # Sphere additions
-            self.ico_verts = util.uv_sphere(args.radius, 300).to(device=device)
+            self.sphere_subdiv = args.sphere_subdiv
+            self.ico_verts = util.uv_sphere(args.radius, self.sphere_subdiv).to(device=device)
         else:
             self.appearance_img = None
         
@@ -527,7 +528,14 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         SB, B, _ = nerf_rays.shape
         
         nerf_radii = torch.full((SB, 1), args.radius).flatten().to(device=device)
-        nerf_enc_patches, nerf_enc_long_lat = util.sample_spherical_rand_rays(nerf_rays, self.ico_verts, nerf_radii, app_data, self.ssh_HW - 1)
+        nerf_enc_patches, nerf_enc_long_lat = util.sample_spherical_rand_rays(
+            nerf_rays,
+            self.ico_verts,
+            nerf_radii,
+            app_data,
+            self.ssh_HW - 1,
+            self.sphere_subdiv
+        )
         nerf_encs = self.patch_encoder(nerf_enc_patches).detach().reshape(SB, B, -1)
         nerf_encs = torch.cat((nerf_encs, nerf_enc_long_lat), dim=-1)
 
@@ -547,12 +555,19 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         reg_render_dict = app_render_dict = None
 
         # Choose rays corresponding to an image patch at our disposal
-        patch_rays, patch_rays_gt = self.patch_rays(data)
+        patch_rays, _ = self.patch_rays(data)
         patch_radii = nerf_radii
         B = patch_rays.shape[1]
 
         # Some pixels might be really close together and use the same encoding
-        patch_uv, patch_long_lat = util.sample_spherical_patch_rays(patch_rays, self.ico_verts, patch_radii, app_data, self.ssh_HW - 1)
+        patch_uv, patch_long_lat = util.sample_spherical_patch_rays(
+            patch_rays,
+            self.ico_verts,
+            patch_radii,
+            app_data,
+            self.ssh_HW - 1,
+            self.sphere_subdiv
+        )
         patch_uv = patch_uv.reshape(-1, 2)
 
         unique_uv, inv_map = patch_uv.unique(dim=0, return_inverse=True)
@@ -669,7 +684,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
                 bounding_radius = util.bounding_sphere_radius(cam_rays).unsqueeze(0)
 
                 # Some pixels might be really close together and use the same encoding
-                uv_env = util.sample_spherical_uv(test_rays, bounding_radius, app_data, 223)
+                uv_env = util.sample_spherical_uv(test_rays, bounding_radius, app_data, 223, args.sphere_subdiv)
                 uv_env = torch.cat(uv_env, dim=-1).reshape(-1, 2)
                 unique_uv, inv_map = uv_env.unique(dim=0, return_inverse=True)
                 unq_u = unique_uv[:, 0].reshape(1, -1, 1)
