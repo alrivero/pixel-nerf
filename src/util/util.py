@@ -691,20 +691,11 @@ def rays_blinn_newell_uv(intersections, radii, app_imgs, patch_size):
 
 def closest_sphere_verts(view_coords, sph_verts, radii, subdiv):
     SB, B, _ = view_coords.shape
-    device = view_coords.get_device()
+    sph_verts = sph_verts.reshape(-1, 3)
+    view_coords = view_coords.reshape(-1, 3)
 
-    x = view_coords[:, :, [0]]
-    y = view_coords[:, :, [1]]
-    z = view_coords[:, :, [2]]
-    radii = radii.expand(SB, B).unsqueeze(-1)
-
-    view_long = ((torch.atan2(y, x) + (2.0 * pi)) % (2.0 * pi))
-    view_lat = (torch.acos(z / radii))
-
-    long_inds = (view_long / (2.0 * pi) * 2 * subdiv).long().flatten()
-    lat_inds = (view_lat / pi * subdiv).long().flatten()
-
-    return sph_verts[long_inds, lat_inds, :].reshape(SB, B, -1)
+    max_dot_inds = torch.matmul(sph_verts, view_coords.T).argmax(dim=0)
+    return sph_verts[max_dot_inds, :].reshape(SB, B, -1)
 
 def longitude_lattitude_norm(intersections, radii, app_imgs):
     SB, B, _ = intersections.shape
