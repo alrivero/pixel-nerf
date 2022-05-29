@@ -709,7 +709,7 @@ def closest_sphere_verts(view_coords, sph_verts, radii, subdiv):
     long_inds = torch.abs(subdiv_long - view_long).argmin(dim=1).flatten()
     lat_inds = torch.abs(subdiv_lat - view_lat).argmin(dim=1).flatten()
 
-    return sph_verts[long_inds, lat_inds :].reshape(SB, B, -1)
+    return sph_verts[long_inds, lat_inds, :].reshape(SB, B, -1)
 
 def longitude_lattitude_norm(intersections, radii, app_imgs):
     SB, B, _ = intersections.shape
