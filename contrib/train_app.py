@@ -553,7 +553,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         B = patch_rays.shape[1]
 
         # Some pixels might be really close together and use the same encoding
-        patch_uv, patch_long_lat = util.sample_spherical_patch_rays(patch_rays, self.ico_verts, patch_radii, app_data)
+        patch_uv, patch_long_lat = util.sample_spherical_patch_rays(patch_rays, self.ico_verts, patch_radii, app_data, self.ssh_HW - 1)
         patch_uv = patch_uv.reshape(-1, 2)
 
         unique_uv, inv_map = patch_uv.unique(dim=0, return_inverse=True)
