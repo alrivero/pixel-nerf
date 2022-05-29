@@ -691,22 +691,23 @@ def rays_blinn_newell_uv(intersections, radii, app_imgs, patch_size):
 
 def closest_sphere_verts(view_coords, sph_verts, radii, subdiv):
     SB, B, _ = view_coords.shape
+    device = view_coords.get_device()
 
     x = view_coords[:, :, [0]]
     y = view_coords[:, :, [1]]
     z = view_coords[:, :, [2]]
     radii = radii.expand(SB, B).unsqueeze(-1)
 
-    view_long = ((torch.atan2(y, x) + (2.0 * pi)) % (2.0 * pi)).flatten()
-    view_lat = (torch.acos(z / radii)).flatten()
+    view_long = ((torch.atan2(y, x) + (2.0 * pi)) % (2.0 * pi)).flatten().unsqueeze(-1)
+    view_lat = (torch.acos(z / radii)).flatten().unsqueeze(-1)
 
-    subdiv_long = (torch.linspace(0, 1, 2 * subdiv) * 2 * pi)
-    subdiv_lat = (torch.linspace(0, 1, subdiv) * pi)
+    subdiv_long = (torch.linspace(0, 1, 2 * subdiv) * 2 * pi).to(device=device)
+    subdiv_lat = (torch.linspace(0, 1, subdiv) * pi).to(device=device)
     subdiv_long = subdiv_long.expand(SB * B, 2 * subdiv)
     subdiv_lat = subdiv_lat.expand(SB * B, subdiv)
 
-    long_inds = 1 / (1 + F.relu(subdiv_long - view_long)).max(dim=0)
-    lat_inds = 1 / (1 + F.relu(subdiv_lat - view_lat)).max(dim=0)
+    long_inds = 1 / (1 + F.relu(subdiv_long - view_long)).max(dim=1)
+    lat_inds = 1 / (1 + F.relu(subdiv_lat - view_lat)).max(dim=1)
 
     return sph_verts[long_inds, lat_inds :].reshape(SB, B, -1)
 
