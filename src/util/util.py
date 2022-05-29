@@ -618,7 +618,7 @@ def viewing_plane_sphere_coords(rays, radii):
 
 def sample_spherical_rand_rays(rays, icos_verts, radii, app_imgs, patch_size, subdiv):
     view_coords = viewing_plane_sphere_coords(rays, radii)
-    closest_verts = closest_sphere_verts(view_coords, icos_verts, subdiv)
+    closest_verts = closest_sphere_verts(view_coords, icos_verts, radii, subdiv)
 
     uv_env = rays_blinn_newell_uv(closest_verts, radii, app_imgs, patch_size)
     enc_patches = uv_to_rgb_patches(app_imgs, uv_env, patch_size)
@@ -627,7 +627,7 @@ def sample_spherical_rand_rays(rays, icos_verts, radii, app_imgs, patch_size, su
 
 def sample_spherical_patch_rays(patch_rays, icos_verts, radii, app_imgs, patch_size, subdiv):
     view_coords = viewing_plane_sphere_coords(patch_rays, radii)
-    closest_verts = closest_sphere_verts(view_coords, icos_verts, subdiv)
+    closest_verts = closest_sphere_verts(view_coords, icos_verts, radii, subdiv)
 
     uv_env = rays_blinn_newell_uv(closest_verts, radii, app_imgs, patch_size)
     long_lat = longitude_lattitude_norm(closest_verts, radii, app_imgs)
@@ -689,7 +689,7 @@ def rays_blinn_newell_uv(intersections, radii, app_imgs, patch_size):
 
     return u, v
 
-def closest_sphere_verts(view_coords, sph_verts, subdiv):
+def closest_sphere_verts(view_coords, sph_verts, radii, subdiv):
     SB, B, _ = view_coords.shape
 
     x = view_coords[:, :, [0]]
