@@ -494,6 +494,9 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         return rgb_loss
 
     def calc_losses_no_app(self, data, app_data, is_train=True, global_step=0):
+        # Establish the views we'll be using to train
+        src_images, _ = self.choose_views(self.nerf_data)
+
         # Choose our standard randomly-smapled rays for our regular pass
         nerf_rays, nerf_rays_gt, _ = self.rand_rays(data, is_train, global_step)
 
@@ -511,6 +514,9 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         return loss_dict
 
     def calc_losses_app(self, data, app_data, is_train=True, global_step=0):
+        # Establish the views we'll be using to train
+        src_images, _ = self.choose_views(self.nerf_data)
+
         # Choose our standard randomly-smapled rays for our regular pass
         nerf_rays, nerf_rays_gt = self.rand_rays(data, is_train, global_step)
         SB, B, _ = nerf_rays.shape
