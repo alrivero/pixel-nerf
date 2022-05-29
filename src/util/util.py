@@ -701,8 +701,8 @@ def closest_sphere_verts(view_coords, sph_verts, radii, subdiv):
     view_long = ((torch.atan2(y, x) + (2.0 * pi)) % (2.0 * pi))
     view_lat = (torch.acos(z / radii))
 
-    long_inds = (view_long / (2 * subdiv)).long().flatten()
-    lat_inds = (view_lat / subdiv).long().flatten()
+    long_inds = (view_long / (2.0 * pi) * 2 * subdiv).long().flatten()
+    lat_inds = (view_lat / pi * subdiv).long().flatten()
 
     return sph_verts[long_inds, lat_inds, :].reshape(SB, B, -1)
 
