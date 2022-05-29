@@ -569,7 +569,7 @@ def uv_sphere(radius, subdiv):
 
     x = radius * torch.matmul(cos_long, sin_lat.T)
     y = radius * torch.matmul(sin_long, sin_lat.T)
-    z = radius * cos_lat.expand(2 * subdiv, subdiv)
+    z = radius * cos_lat.T.expand(2 * subdiv, subdiv)
 
     return torch.cat((x, y, z), dim=-1)
 
