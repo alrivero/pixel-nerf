@@ -557,7 +557,7 @@ def get_random_patch(t, Hp, Wp):
     return crop(t, i, j, Hp, Wp)
 
 def uv_sphere(radius, subdiv):
-    subdiv_long = (torch.linspace(0, 1, 4 * subdiv) * 4 * pi).unsqueeze(-1)
+    subdiv_long = (torch.linspace(0, 1, 2 * subdiv) * 2 * pi).unsqueeze(-1)
     subdiv_lat = (torch.linspace(0, 1, subdiv) * pi).unsqueeze(-1)
 
     sin_long = torch.sin(subdiv_long)
@@ -566,9 +566,9 @@ def uv_sphere(radius, subdiv):
     sin_lat = torch.sin(subdiv_lat)
     cos_lat = torch.cos(subdiv_lat)
 
-    x = radius * torch.matmul(sin_lat, cos_long.T).reshape(4 * subdiv * subdiv, 1)
-    y = radius * torch.matmul(sin_lat, sin_long.T).reshape(4 * subdiv * subdiv, 1)
-    z = radius * cos_lat.expand(subdiv, 4 * subdiv).reshape(4 * subdiv * subdiv, 1)
+    x = radius * torch.matmul(sin_lat, cos_long.T).reshape(2 * subdiv * subdiv, 1)
+    y = radius * torch.matmul(sin_lat, sin_long.T).reshape(2 * subdiv * subdiv, 1)
+    z = radius * cos_lat.expand(subdiv, 2 * subdiv).reshape(2 * subdiv * subdiv, 1)
 
     return torch.cat((x, y, z), dim=-1)
 
@@ -633,12 +633,13 @@ def sample_spherical_rand_rays(rays, icos_verts, radii, app_imgs, patch_size):
     long_lat = longitude_lattitude_norm(closest_verts, radii, app_imgs)
     return enc_patches, long_lat
 
-def sample_spherical_patch_rays(patch_rays, icos_verts, radii, app_imgs):
+def sample_spherical_patch_rays(patch_rays, icos_verts, radii, app_imgs, patch_size):
     view_coords = viewing_plane_sphere_coords(patch_rays, radii)
-    bounding_ll = bounding_long_lat(view_coords, radii, app_imgs)
-    bounded_icos = bounded_icos_verts(icos_verts, bounding_ll, radii, app_imgs)
+    closest_verts = closest_sphere_verts(view_coords, icos_verts)
 
-    return view_coords, bounded_icos
+    uv_env = rays_blinn_newell_uv(closest_verts, radii, app_imgs, patch_size)
+    long_lat = longitude_lattitude_norm(closest_verts, radii, app_imgs)
+    return uv_env, long_lat
 
 def inverse_distance_weighting(view_coords, bounded_icos, icos_encs, radii):
     all_results = []
