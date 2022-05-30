@@ -69,6 +69,7 @@ dset_app = AppearanceDataset(args.appdir, "train", image_size=(2048, 4096)) # SE
 app_imgs = dset_app[args.app_set_ind][args.app_ind].unsqueeze(0).to(device=device)
 
 sphere_verts = util.uv_sphere(args.radius, args.sphere_subdiv).to(device=device)
+sphere_verts = sphere_verts.reshape(-1, 3)
 
 radius = torch.tensor(args.radius).unsqueeze(-1).to(device=device)
 
@@ -77,7 +78,7 @@ with torch.no_grad():
     for rays in tqdm.tqdm(
         torch.split(sphere_verts, args.batch_size, dim=0)
     ):
-        uv_env = util.rays_blinn_newell_uv(rays, radius, app_imgs, 223)
+        uv_env = util.rays_blinn_newell_uv(rays[None], radius, app_imgs, 223)
         enc_patches = util.uv_to_rgb_patches(app_imgs, uv_env, 223)
         batch_encs = ref_encoder(enc_patches)
         all_encs.append(batch_encs.to(device="cpu"))
