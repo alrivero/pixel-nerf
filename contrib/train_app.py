@@ -527,7 +527,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         SB, B, _ = nerf_rays.shape
         
         nerf_radii = torch.full((SB, 1), args.radius).flatten().to(device=device)
-        nerf_encs, nerf_long_lat, _ = util.sample_spherical_rand_encs(
+        nerf_encs, nerf_long_lat, _ = util.sample_spherical_ray_encs(
             nerf_rays,
             self.sphere_verts,
             self.sphere_encs,
@@ -558,7 +558,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         B = patch_rays.shape[1]
 
         # Some pixels might be really close together and use the same encoding
-        patch_encs, patch_long_lat, patch_uv = util.sample_spherical_rand_encs(
+        patch_encs, patch_long_lat, patch_uv = util.sample_spherical_ray_encs(
             patch_rays,
             self.sphere_verts,
             self.sphere_encs,
