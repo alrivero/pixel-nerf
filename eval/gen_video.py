@@ -288,14 +288,13 @@ with torch.no_grad():
         )
         all_encs = all_encs.to(device=device)
         all_ll = all_ll.to(device=device)
-        all_uv = all_uv.reshape(-1, 2)
 
         final_encs = torch.cat((all_encs, all_ll), dim=-1)
 
         # Render out our scene using these encodings per ray
         rgb, _ = render_par(rays[None], final_encs)
 
-        uv_min_max = util.update_uv_min_max(all_uv[:, 0], all_uv[:, 1], uv_min_max, 223)
+        uv_min_max = util.update_uv_min_max(all_uv[0][0], all_uv[1][0], uv_min_max, 223)
         current_step = (current_step + 1) % args.batch_size
         if current_step == 0:
             harm_area = app_imgs[:, :, uv_min_max[2]:(uv_min_max[3] + 223), uv_min_max[0]:(uv_min_max[1] + 223)]
