@@ -535,6 +535,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             app_data,
             self.ssh_HW - 1
         )
+        nerf_encs = nerf_encs.to(device=device)
         nerf_encs = torch.cat((nerf_encs, nerf_long_lat), dim=-1).to(device=device)
 
         # Render out our scene with our ground truth model
@@ -566,6 +567,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             app_data,
             self.ssh_HW - 1
         )
+        patch_encs = patch_encs.to(device=device)
         patch_encs = torch.cat((patch_encs, patch_long_lat), dim=-1).to(device=device)
 
         # Get a patch to harmonize with
