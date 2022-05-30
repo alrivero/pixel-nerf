@@ -577,7 +577,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         v_max = patch_uv[1].max() + self.ssh_HW - 1
         v_min = patch_uv[1].min()
         patch_harm_patch = app_data[:, :, v_min:v_max, u_min:u_max]
-        patch_harm_patch = torch.flip(patch_harm_patch, dims=[2, 3])
+        # patch_harm_patch = torch.flip(patch_harm_patch, dims=[2, 3])
 
         # These are a lot of rays. Decompose them into render batches and render
         batch_step = B // self.patch_batch_size
