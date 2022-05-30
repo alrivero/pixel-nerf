@@ -121,6 +121,9 @@ def extra_args(parser):
         help="Distance of camera from origin, default is average of z_far, z_near of dataset (only for non-DTU)",
     )
     parser.add_argument(
+        "--sphere_dir", "-SD", type=str, default=None, help="Directory of sphere encodings"
+    )
+    parser.add_argument(
         "--sphere_subdiv",
         "-S",
         type=int,
@@ -256,7 +259,9 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
 
             # Sphere additions
             self.sphere_subdiv = args.sphere_subdiv
-            self.ico_verts = util.uv_sphere(args.radius, self.sphere_subdiv).to(device=device)
+            # Encoded sphere encs
+            self.sphere_encs = torch.load(args.sphere_dir)
+            self.sphere_verts = util.uv_sphere(args.radius, args.sphere_subdiv).to(device=device)
         else:
             self.appearance_img = None
         
@@ -522,16 +527,15 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         SB, B, _ = nerf_rays.shape
         
         nerf_radii = torch.full((SB, 1), args.radius).flatten().to(device=device)
-        nerf_enc_patches, nerf_enc_long_lat = util.sample_spherical_rand_rays(
+        nerf_encs, nerf_long_lat, _ = util.sample_spherical_rand_encs(
             nerf_rays,
-            self.ico_verts,
+            self.sphere_verts,
+            self.sphere_encs,
             nerf_radii,
             app_data,
-            self.ssh_HW - 1,
-            self.sphere_subdiv
+            self.ssh_HW - 1
         )
-        nerf_encs = self.patch_encoder(nerf_enc_patches).detach().reshape(SB, B, -1)
-        nerf_encs = torch.cat((nerf_encs, nerf_enc_long_lat), dim=-1)
+        nerf_encs = torch.cat((nerf_encs, nerf_long_lat), dim=-1).to(device=device)
 
         # Render out our scene with our ground truth model
         reg_render_dict = self.reg_pass(nerf_rays)
@@ -554,39 +558,24 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         B = patch_rays.shape[1]
 
         # Some pixels might be really close together and use the same encoding
-        patch_uv, patch_long_lat = util.sample_spherical_patch_rays(
+        patch_encs, patch_long_lat, patch_uv = util.sample_spherical_rand_encs(
             patch_rays,
-            self.ico_verts,
+            self.sphere_verts,
+            self.sphere_encs,
             patch_radii,
             app_data,
-            self.ssh_HW - 1,
-            self.sphere_subdiv
+            self.ssh_HW - 1
         )
-        patch_uv = patch_uv.reshape(-1, 2)
-
-        unique_uv, inv_map = patch_uv.unique(dim=0, return_inverse=True)
-        unq_u = unique_uv[:, 0].reshape(1, -1, 1)
-        unq_v = unique_uv[:, 1].reshape(1, -1, 1)
-        unq_patches = util.uv_to_rgb_patches(app_data, (unq_u, unq_v), self.ssh_HW - 1)
-        unq_encs = self.patch_encoder(unq_patches)
-
-        ind = torch.arange(SB * B)
-        patch_encs = torch.zeros(SB * B, 512).to(device=device)
-        patch_encs[ind] = unq_encs[inv_map]
-        patch_encs = patch_encs.reshape(SB, B, -1)
-        patch_encs = torch.cat((patch_encs, patch_long_lat), dim=-1)
+        patch_encs = torch.cat((patch_encs, patch_long_lat), dim=-1).to(device=device)
 
         # Get a patch to harmonize with
         # *******
-        offset = 223
-        u_max = unq_u.max() + offset
-        u_min = unq_u.min()
-        v_max = unq_v.max() + offset
-        v_min = unq_v.min()
+        u_max = patch_uv[0].max() + self.ssh_HW - 1
+        u_min = patch_uv[0].min()
+        v_max = patch_uv[1].max() + self.ssh_HW - 1
+        v_min = patch_uv[1].min()
         patch_harm_patch = app_data[:, :, v_min:v_max, u_min:u_max]
         patch_harm_patch = torch.flip(patch_harm_patch, dims=[2, 3])
-
-        # NOTE: IF THIS WORKS, FIX SB
 
         # These are a lot of rays. Decompose them into render batches and render
         batch_step = B // self.patch_batch_size
