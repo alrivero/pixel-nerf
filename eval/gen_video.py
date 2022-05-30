@@ -282,7 +282,7 @@ with torch.no_grad():
             rays[None],
             sphere_verts,
             sphere_encs,
-            radius,
+            bounding_radius,
             app_imgs,
             223
         )
