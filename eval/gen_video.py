@@ -151,7 +151,7 @@ z_near = dset.z_near
 z_far = dset.z_far
 
 # Reference encoder used across network
-ref_encoder = StyleEncoder(4, 3, 32, 512, norm="BN", activ="relu", pad_type='reflect')
+ref_encoder = StyleEncoder(4, 3, 32, 512, norm="IN", activ="relu", pad_type='reflect')
 ref_encoder.load_state_dict(torch.load(args.refencdir))
 patch_encoder = PatchEncoder(ref_encoder).to(device=device)
 
