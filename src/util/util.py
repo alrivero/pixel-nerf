@@ -726,7 +726,7 @@ def longitude_lattitude_norm(intersections, radii, app_imgs):
     radii = radii.expand(SB, B).unsqueeze(-1)
 
     long = torch.atan2(z, x) / pi
-    lat = torch.asin(y / radii) / (pi / 2)
+    lat = torch.asin(-y / radii) / (pi / 2)
 
     return torch.cat((long, lat), dim=-1)
 
