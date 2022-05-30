@@ -13,7 +13,7 @@ import util
 import tqdm
 from data.AppearanceDataset import AppearanceDataset
 from contrib.model.unet_tile_se_norm import StyleEncoder
-
+from contrib.model.PatchEncoder import PatchEncoder
 
 def extra_args(parser):
     parser.add_argument(
@@ -48,7 +48,7 @@ def extra_args(parser):
         "--batch_size",
         "-B",
         type=int,
-        default=200,
+        default=100,
         help="# of patches to encode per iteration",
     )
     return parser
@@ -62,6 +62,7 @@ device = util.get_cuda(args.gpu_id[0])
 # Reference encoder used across network
 ref_encoder = StyleEncoder(4, 3, 32, 512, norm="BN", activ="relu", pad_type='reflect').to(device=device)
 ref_encoder.load_state_dict(torch.load(args.refencdir))
+patch_encoder = PatchEncoder(ref_encoder)
 
 print("Encoding Patches...")
 
