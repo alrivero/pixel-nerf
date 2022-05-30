@@ -261,7 +261,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
             self.sphere_subdiv = args.sphere_subdiv
             # Encoded sphere encs
             self.sphere_encs = torch.load(args.sphere_dir)
-            self.sphere_verts = util.uv_sphere(args.radius, args.sphere_subdiv).to(device=device)
+            self.sphere_verts = ico_sphere(level=args.sphere_subdiv, device=device).verts_list()[0]
         else:
             self.appearance_img = None
         
