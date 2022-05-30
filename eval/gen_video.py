@@ -278,7 +278,7 @@ with torch.no_grad():
         B, _ = rays.shape
 
         # Get encodings from sphere_encs
-        all_encs, all_uv = util.sample_spherical_ray_encs(
+        all_encs, all_ll, all_uv = util.sample_spherical_ray_encs(
             rays[None],
             sphere_verts,
             sphere_encs,
@@ -287,10 +287,13 @@ with torch.no_grad():
             223
         )
         all_encs = all_encs.to(device=device)
+        all_ll = all_ll.to(device=device)
         all_uv = all_uv.reshape(-1, 2)
 
+        final_encs = torch.cat((all_encs, all_ll), dim=-1)
+
         # Render out our scene using these encodings per ray
-        rgb, _ = render_par(rays[None], all_encs)
+        rgb, _ = render_par(rays[None], final_encs)
 
         uv_min_max = util.update_uv_min_max(all_uv[:, 0], all_uv[:, 1], uv_min_max, 223)
         current_step = (current_step + 1) % args.batch_size

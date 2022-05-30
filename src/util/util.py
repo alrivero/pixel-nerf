@@ -639,7 +639,7 @@ def sample_spherical_ray_encs(patch_rays, sphere_verts, sphere_encs, radii, app_
     verts, encs = closest_sphere_verts_encs(view_coords, sphere_verts, sphere_encs)
     uv_env = rays_blinn_newell_uv(verts, radii, app_imgs, patch_size)
     long_lat = longitude_lattitude_norm(view_coords, radii, app_imgs)
-    return torch.cat((encs, long_lat), dim=-1), uv_env
+    return encs, long_lat, uv_env
 
 def inverse_distance_weighting(view_coords, bounded_sph, sphere_encs, radii):
     all_results = []
