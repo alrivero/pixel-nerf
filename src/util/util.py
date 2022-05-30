@@ -585,23 +585,23 @@ def bounding_long_lat(patch_rays, radii, app_imgs):
 
     return long_min, long_max, lat_min, lat_max
 
-def bounded_icos_verts(icos_verts, bounding_ll, radii, app_imgs):
+def bounded_sphere_verts(sphere_verts, bounding_ll, radii, app_imgs):
     long_min, long_max, lat_min, lat_max = bounding_ll
     SB = long_min.shape[0]
 
-    icos_ll = longitude_lattitude_norm(icos_verts[None], radii, app_imgs).reshape(-1, 2)
-    icos_long = icos_ll[:, [0]]
-    icos_lat = icos_ll[:, [1]]
+    sphere_ll = longitude_lattitude_norm(sphere_verts[None], radii, app_imgs).reshape(-1, 2)
+    sphere_long = sphere_ll[:, [0]]
+    sphere_lat = sphere_ll[:, [1]]
 
-    all_icos_verts = []
+    all_sphere_verts = []
     for i in range(SB):
-        final_long = torch.logical_and(icos_long >= long_min[i], icos_long <= long_max[i])
-        final_lat = torch.logical_and(icos_lat >= lat_min[i], icos_lat <= lat_max[i])
+        final_long = torch.logical_and(sphere_long >= long_min[i], sphere_long <= long_max[i])
+        final_lat = torch.logical_and(sphere_lat >= lat_min[i], sphere_lat <= lat_max[i])
         final_ind = torch.logical_and(final_long, final_lat).flatten()
 
-        all_icos_verts.append(icos_verts[final_ind])
+        all_sphere_verts.append(sphere_verts[final_ind])
 
-    return all_icos_verts
+    return all_sphere_verts
 
 def viewing_plane_sphere_coords(rays, radii):
     SB, B, _ = rays.shape
@@ -616,32 +616,40 @@ def viewing_plane_sphere_coords(rays, radii):
 
     return view_coords
 
-def sample_spherical_rand_rays(rays, icos_verts, radii, app_imgs, patch_size, subdiv):
+def sample_spherical_rand_rays(rays, sphere_verts, radii, app_imgs, patch_size, subdiv):
     view_coords = viewing_plane_sphere_coords(rays, radii)
-    closest_verts = closest_sphere_verts(view_coords, icos_verts, radii, subdiv)
+    closest_verts = closest_sphere_verts(view_coords, sphere_verts, radii, subdiv)
 
     uv_env = rays_blinn_newell_uv(closest_verts, radii, app_imgs, patch_size)
     enc_patches = uv_to_rgb_patches(app_imgs, uv_env, patch_size)
     long_lat = longitude_lattitude_norm(closest_verts, radii, app_imgs)
     return enc_patches, long_lat
 
-def sample_spherical_patch_rays(patch_rays, icos_verts, radii, app_imgs, patch_size, subdiv):
+def sample_spherical_patch_rays(patch_rays, sphere_verts, radii, app_imgs, patch_size, subdiv):
     view_coords = viewing_plane_sphere_coords(patch_rays, radii)
-    closest_verts = closest_sphere_verts(view_coords, icos_verts, radii, subdiv)
+    closest_verts = closest_sphere_verts(view_coords, sphere_verts, radii, subdiv)
 
     uv_env = rays_blinn_newell_uv(closest_verts, radii, app_imgs, patch_size)
     long_lat = longitude_lattitude_norm(closest_verts, radii, app_imgs)
     return torch.cat(uv_env, dim=-1), long_lat
 
-def inverse_distance_weighting(view_coords, bounded_icos, icos_encs, radii):
-    all_results = []
-    for i in range(len(bounded_icos)):
-        curr_view_coords = view_coords[i]
-        curr_bound_icos = bounded_icos[i]
-        curr_encs = icos_encs[i]
+def sample_spherical_ray_encs(patch_rays, sphere_verts, sphere_encs, radii, app_imgs, patch_size):
+    view_coords = viewing_plane_sphere_coords(patch_rays, radii)
 
-        inner_prod_ci = torch.matmul(curr_bound_icos, curr_view_coords.T)
-        norm_ci = torch.norm(curr_bound_icos, dim=-1) * radii[i]
+    verts, encs = closest_sphere_verts_encs(view_coords, sphere_verts, sphere_encs)
+    uv_env = rays_blinn_newell_uv(verts, radii, app_imgs, patch_size)
+    long_lat = longitude_lattitude_norm(view_coords, radii, app_imgs)
+    return torch.cat((encs, long_lat), dim=-1), uv_env
+
+def inverse_distance_weighting(view_coords, bounded_sph, sphere_encs, radii):
+    all_results = []
+    for i in range(len(bounded_sph)):
+        curr_view_coords = view_coords[i]
+        curr_bound_sph = bounded_sph[i]
+        curr_encs = sphere_encs[i]
+
+        inner_prod_ci = torch.matmul(curr_bound_sph, curr_view_coords.T)
+        norm_ci = torch.norm(curr_bound_sph, dim=-1) * radii[i]
 
         angle_ci = torch.acos(inner_prod_ci / norm_ci)
         inv_weight = 1 / angle_ci
@@ -689,13 +697,24 @@ def rays_blinn_newell_uv(intersections, radii, app_imgs, patch_size):
 
     return u, v
 
-def closest_sphere_verts(view_coords, sph_verts, radii, subdiv):
+def closest_sphere_verts(view_coords, sphere_verts, radii, subdiv):
     SB, B, _ = view_coords.shape
-    sph_verts = sph_verts.reshape(-1, 3)
+    sphere_verts = sphere_verts.reshape(-1, 3)
     view_coords = view_coords.reshape(-1, 3)
 
-    max_dot_inds = torch.matmul(sph_verts, view_coords.T).argmax(dim=0)
-    return sph_verts[max_dot_inds, :].reshape(SB, B, -1)
+    max_dot_inds = torch.matmul(sphere_verts, view_coords.T).argmax(dim=0)
+    return sphere_verts[max_dot_inds, :].reshape(SB, B, -1)
+
+def closest_sphere_verts_encs(view_coords, sphere_verts, sphere_encs):
+    SB, B, _ = view_coords.shape
+    sphere_verts = sphere_verts.reshape(-1, 3)
+    view_coords = view_coords.reshape(-1, 3)
+
+    max_dot_inds = torch.matmul(sphere_verts, view_coords.T).argmax(dim=0)
+
+    verts = sphere_verts[max_dot_inds, :].reshape(SB, B, -1)
+    encs = sphere_encs[max_dot_inds, :].reshape(SB, B, -1)
+    return verts, encs
 
 def longitude_lattitude_norm(intersections, radii, app_imgs):
     SB, B, _ = intersections.shape

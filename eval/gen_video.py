@@ -92,6 +92,16 @@ def extra_args(parser):
         default=1,
         help="Batch size used per frame (resolution needs to be divisible by it)"
     )
+    parser.add_argument(
+        "--sphere_dir", "-SD", type=str, default=None, help="Directory of sphere encodings"
+    )
+    parser.add_argument(
+        "--sphere_subdiv",
+        "-S",
+        type=int,
+        default=200,
+        help="Level of subdivision used for sphere points",
+    )
     return parser
 
 
@@ -151,6 +161,10 @@ z_far = dset.z_far
 ref_encoder = StyleEncoder(4, 3, 32, 512, norm="BN", activ="relu", pad_type='reflect')
 ref_encoder.load_state_dict(torch.load(args.refencdir))
 patch_encoder = PatchEncoder(ref_encoder).to(device=device)
+
+# Encoded sphere encs
+sphere_encs = torch.load(args.sphere_dir)
+sphere_verts = util.uv_sphere(args.radius, args.sphere_subdiv)
 
 print("Generating rays")
 
@@ -270,38 +284,22 @@ with torch.no_grad():
     ):
         B, _ = rays.shape
 
-        # Some pixels might be really close together and use the same encoding
-        uv_env, long_lat = util.sample_spherical_uv_data(rays[None], bounding_radius, app_imgs, 223)
-        uv_env = uv_env.reshape(-1, 2)
-        unique_uv, inv_map = uv_env.unique(dim=0, return_inverse=True)
-        unq_u = unique_uv[:, 0].reshape(1, -1, 1)
-        unq_v = unique_uv[:, 1].reshape(1, -1, 1)
-        unq_patches = util.uv_to_rgb_patches(app_imgs, (unq_u, unq_v), 223)
-
-        # Process the encodings of our patches in batches
-        num_unq = unique_uv.shape[0]
-        b_start = 0
-
-        unq_encs = []
-        while b_start < num_unq:
-            b_inc = min(num_unq, args.patch_batch_size)
-            b_end = b_start + b_inc#
-
-            batch_patches = unq_patches[b_start:b_end, :, :, :]
-            unq_encs.append(patch_encoder(batch_patches))
-
-            b_start = b_end
-        unq_encs = torch.cat(unq_encs)
-
-        all_encs = torch.zeros(B, 512).to(device=device)
-        ind = torch.arange(B)
-        all_encs[ind] = unq_encs[inv_map]
-        all_encs = torch.cat((all_encs[None], long_lat), dim=-1)
+        # Get encodings from sphere_encs
+        all_encs, all_uv = util.sample_spherical_ray_encs(
+            rays[None],
+            sphere_verts,
+            sphere_encs,
+            radius,
+            app_imgs,
+            223
+        )
+        all_encs = all_encs.to(device=device)
+        all_uv = all_uv.reshape(-1, 2)
 
         # Render out our scene using these encodings per ray
         rgb, _ = render_par(rays[None], all_encs)
 
-        uv_min_max = util.update_uv_min_max(unq_u, unq_v, uv_min_max, 223)
+        uv_min_max = util.update_uv_min_max(all_uv[:, 0], all_uv[:, 1], uv_min_max, 223)
         current_step = (current_step + 1) % args.batch_size
         if current_step == 0:
             harm_area = app_imgs[:, :, uv_min_max[2]:(uv_min_max[3] + 223), uv_min_max[0]:(uv_min_max[1] + 223)]
