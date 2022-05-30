@@ -25,6 +25,7 @@ from torch.nn import ZeroPad2d
 from contrib import debug
 from contrib.model.PatchEncoder import PatchEncoder
 from math import ceil
+from pytorch3d.utils import ico_sphere
 
 def extra_args(parser):
     parser.add_argument(
@@ -157,7 +158,7 @@ patch_encoder = PatchEncoder(ref_encoder).to(device=device)
 
 # Encoded sphere encs
 sphere_encs = torch.load(args.sphere_dir)
-sphere_verts = util.uv_sphere(args.radius, args.sphere_subdiv).to(device=device)
+sphere_verts = ico_sphere(args.radius, args.sphere_subdiv).to(device=device)
 
 print("Generating rays")
 
