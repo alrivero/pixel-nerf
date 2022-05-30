@@ -60,7 +60,7 @@ args.resume = True
 device = util.get_cuda(args.gpu_id[0])
 
 # Reference encoder used across network
-ref_encoder = StyleEncoder(4, 3, 32, 512, norm="IN", activ="relu", pad_type='reflect').to(device=device)
+ref_encoder = StyleEncoder(4, 3, 32, 512, norm="BN", activ="relu", pad_type='reflect').to(device=device)
 ref_encoder.load_state_dict(torch.load(args.refencdir))
 patch_encoder = PatchEncoder(ref_encoder)
 
