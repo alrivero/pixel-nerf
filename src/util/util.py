@@ -571,7 +571,7 @@ def uv_sphere(radius, subdiv):
     y = radius * torch.matmul(sin_long, sin_lat.T).unsqueeze(-1)
     z = radius * cos_lat.T.expand(2 * subdiv, subdiv).unsqueeze(-1)
 
-    return torch.cat((x, y, z), dim=-1)
+    return torch.cat((x, y, z), dim=-1).reshape(-1, 3)
 
 def bounding_long_lat(patch_rays, radii, app_imgs):
     all_ll = longitude_lattitude_norm(patch_rays, radii, app_imgs)
