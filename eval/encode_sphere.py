@@ -81,7 +81,7 @@ with torch.no_grad():
     ):
         uv_env = util.rays_blinn_newell_uv(rays[None], radius, app_imgs, 223)
         enc_patches = util.uv_to_rgb_patches(app_imgs, uv_env, 223)
-        batch_encs = ref_encoder(enc_patches)
+        batch_encs = patch_encoder(enc_patches)
         all_encs.append(batch_encs.to(device="cpu"))
     all_encs = torch.cat(all_encs)
 
