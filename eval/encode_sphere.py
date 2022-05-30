@@ -64,8 +64,6 @@ ref_encoder = StyleEncoder(4, 3, 32, 512, norm="BN", activ="relu", pad_type='ref
 ref_encoder.load_state_dict(torch.load(args.refencdir))
 patch_encoder = PatchEncoder(ref_encoder)
 
-print("Encoding Patches...")
-
 dset_app = AppearanceDataset(args.appdir, "train", image_size=(2048, 4096)) # SET IMAGE SIZE
 app_imgs = dset_app[args.app_set_ind][args.app_ind].unsqueeze(0).to(device=device)
 
@@ -74,6 +72,7 @@ sphere_verts = sphere_verts.reshape(-1, 3)
 
 radius = torch.tensor(args.radius).unsqueeze(-1).to(device=device)
 
+print("Encoding Patches...")
 with torch.no_grad():
     all_encs = []
     for rays in tqdm.tqdm(

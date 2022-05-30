@@ -693,7 +693,7 @@ def rays_blinn_newell_uv(intersections, radii, app_imgs, patch_size):
 
     azimuth = (torch.atan2(z, x) + (2.0 * pi)) % (2.0 * pi)
     u = (W * (azimuth / (2 * pi))).long()
-    v = (H * (torch.asin(y / radii) + (pi / 2)) / pi).long()   # Negative y since top-left is 0, 0
+    v = (H * (torch.asin(-y / radii) + (pi / 2)) / pi).long()   # Negative y since top-left is 0, 0
 
     return u, v
 
