@@ -77,8 +77,9 @@ with torch.no_grad():
     for rays in tqdm.tqdm(
         torch.split(sphere_verts, args.batch_size, dim=0)
     ):
-        patches, _ = util.sample_spherical_patch_rays(rays, sphere_verts, radius, app_imgs, 223, args.sphere_subdiv)
-        batch_encs = ref_encoder(patches)
+        uv_env = util.rays_blinn_newell_uv(rays, radius, app_imgs, 223)
+        enc_patches = util.uv_to_rgb_patches(app_imgs, uv_env, 223)
+        batch_encs = ref_encoder(enc_patches)
         all_encs.append(batch_encs.to(device="cpu"))
     all_encs = torch.cat(all_encs)
 
