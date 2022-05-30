@@ -14,7 +14,6 @@ import tqdm
 from data.AppearanceDataset import AppearanceDataset
 from contrib.model.unet_tile_se_norm import StyleEncoder
 from contrib.model.PatchEncoder import PatchEncoder
-from pytorch3d.utils import ico_sphere
 
 def extra_args(parser):
     parser.add_argument(
@@ -70,7 +69,7 @@ print("Encoding Patches...")
 dset_app = AppearanceDataset(args.appdir, "train", image_size=(2048, 4096)) # SET IMAGE SIZE
 app_imgs = dset_app[args.app_set_ind][args.app_ind].unsqueeze(0).to(device=device)
 
-sphere_verts = ico_sphere(level=args.sphere_subdiv, device=device).verts_list()[0]
+sphere_verts = util.uv_sphere(args.radius, args.sphere_subdiv).to(device=device)
 sphere_verts = sphere_verts.reshape(-1, 3)
 
 radius = torch.tensor(args.radius).unsqueeze(-1).to(device=device)
