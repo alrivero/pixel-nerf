@@ -76,7 +76,7 @@ print("Encoding Patches...")
 with torch.no_grad():
     all_encs = []
     for rays in tqdm.tqdm(
-        torch.split(sphere_verts, args.batch_size, dim=0)
+        torch.split(sphere_verts, 1, dim=0)
     ):
         uv_env = util.rays_blinn_newell_uv(rays[None], radius, app_imgs, 223)
         enc_patches = util.uv_to_rgb_patches(app_imgs, uv_env, 223)
