@@ -86,18 +86,11 @@ def extra_args(parser):
         help="Batch size used per frame (resolution needs to be divisible by it)"
     )
     parser.add_argument(
-        "-patch_batch_size",
-        "-PB",
-        type=int,
-        default=1,
-        help="Batch size used per frame (resolution needs to be divisible by it)"
-    )
-    parser.add_argument(
         "--sphere_dir", "-SD", type=str, default=None, help="Directory of sphere encodings"
     )
     parser.add_argument(
         "--sphere_subdiv",
-        "-S",
+        "-SP",
         type=int,
         default=200,
         help="Level of subdivision used for sphere points",
