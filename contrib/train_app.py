@@ -503,7 +503,7 @@ class PixelNeRF_ATrainer(trainlib.Trainer):
         src_images, _ = self.choose_views(self.nerf_data)
 
         # Choose our standard randomly-smapled rays for our regular pass
-        nerf_rays, nerf_rays_gt, _ = self.rand_rays(data, is_train, global_step)
+        nerf_rays, nerf_rays_gt = self.rand_rays(data, is_train, global_step)
 
         # Render out our scene with our ground truth model
         reg_render_dict = self.reg_pass(nerf_rays)
